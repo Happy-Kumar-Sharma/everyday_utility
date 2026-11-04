@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
-from app.core import config, context
+from app.core import audit, config, context
 
 from . import credfile, envfiles
 from .credfile import CredError, CredFile
@@ -87,6 +87,20 @@ def _cred_call(fn, *args):
         raise HTTPException(400, str(e)) from e
 
 
+def _safe_title(e: dict) -> str:
+    """The entry's title for the audit log; an untitled entry's title falls back to its url/username, so hide it."""
+    t = e.get("title", "")
+    return t if t and t not in (e.get("url"), e.get("username")) else "(untitled)"
+
+
+def _entry(cf: CredFile, index: int) -> dict | None:
+    try:
+        entries = cf.read()
+    except CredError:
+        return None
+    return entries[index] if 0 <= index < len(entries) else None
+
+
 @router.get("/creds")
 def creds():
     status = _cred_status()
@@ -109,6 +123,7 @@ def creds_location(req: Location):
         path = path / "credentials.txt"
     _cred_call(credfile.validate_location, path, config.ROOT_DIR)
     context.settings.save(context.services[SERVICE_ID], {"credentials_file": str(path.resolve())})
+    audit.record("credentials", "location", str(path.resolve()))
     return creds()
 
 
@@ -118,23 +133,42 @@ def creds_gitignore():
     if not status["configured"] or status["problem"] or not status["git"].get("in_repo"):
         raise HTTPException(400, status.get("problem") or "file is not inside a repository")
     _cred_call(credfile.add_to_gitignore, Path(status["git"]["repo"]), status["git"]["rel"])
+    audit.record("credentials", "gitignore", status["git"]["repo"], detail={"entry": status["git"]["rel"]})
     return creds()
 
 
+# audit entries carry the login's title only, never its url / username / password / notes
 @router.post("/creds/entries")
 def creds_add(entry: CredEntry):
-    return _cred_call(_safe_file().add, entry.model_dump())
+    added = _cred_call(_safe_file().add, entry.model_dump())
+    audit.record("credentials", "add", _safe_title(added))
+    return added
 
 
 @router.put("/creds/entries/{index}")
 def creds_update(index: int, entry: CredUpdate):
     data = entry.model_dump(exclude={"original_hash"})
-    return _cred_call(_safe_file().update, index, entry.original_hash, data)
+    cf = _safe_file()
+    old = _entry(cf, index)
+    old_title = _safe_title(old) if old else ""
+    if old_title == "(untitled)" and data["title"].strip() == old["title"]:
+        # the edit form echoes the auto-filled title back: let it follow the new url/username instead of
+        # freezing the old one as a "real" title (which the log would then show)
+        data["title"] = ""
+    updated = _cred_call(cf.update, index, entry.original_hash, data)
+    title = _safe_title(updated)
+    audit.record("credentials", "update", title,
+                 detail={"renamed_from": old_title} if old_title and old_title != title else None)
+    return updated
 
 
 @router.delete("/creds/entries/{index}")
 def creds_delete(index: int, hash: str):
-    _cred_call(_safe_file().delete, index, hash)
+    cf = _safe_file()
+    old = _entry(cf, index)
+    title = _safe_title(old) if old else ""
+    _cred_call(cf.delete, index, hash)
+    audit.record("credentials", "delete", title)
     return {"ok": True}
 
 
@@ -174,12 +208,15 @@ def env_repos():
 
 @router.post("/env/repos")
 def env_add_repo(req: RepoPath):
-    return _env_call(repos.add_repo, req.path)
+    added = _env_call(repos.add_repo, req.path)
+    audit.record("env-files", "repo-add", req.path)
+    return added
 
 
 @router.post("/env/repos/remove")
 def env_remove_repo(req: RepoPath):
     repos.remove_repo(req.path)
+    audit.record("env-files", "repo-remove", req.path)
     return {"ok": True}
 
 
@@ -226,6 +263,7 @@ def _allowed_file(path: str) -> Path:
 def env_file(path: str):
     p = _allowed_file(path)
     text = _env_call(envfiles.read_text, p)
+    audit.record("env-files", "view", str(p))  # the path only: values never reach the log
     return {"path": str(p), "content": text, "vars": envfiles.parse_vars(text)}
 
 
@@ -236,4 +274,7 @@ def env_export(req: ExportRequest):
     if not selected:
         raise HTTPException(400, "no repositories registered")
     name = "env_export.txt" if len(selected) != 1 else f"env_export_{selected[0]['name']}.txt"
-    return _text_download(envfiles.export_text(selected, patterns, depth), name)
+    text = envfiles.export_text(selected, patterns, depth)
+    files = sum(f["exists"] for r in selected for f in envfiles.repo_files(r, patterns, depth))
+    audit.record("env-files", "export", name, detail={"repos": [r["name"] for r in selected], "files": files})
+    return _text_download(text, name)

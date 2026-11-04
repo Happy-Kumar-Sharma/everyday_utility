@@ -11,6 +11,7 @@ import importlib
 import logging
 import pkgutil
 import traceback
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from fastapi import APIRouter
@@ -42,6 +43,14 @@ class Service:
     # the frontend module's background(ctx) is started at page load, even before the tab is opened
     # (e.g. reminders); the module must then export `background`
     background: bool = False
+    # optional global-search provider (Ctrl+K): search(query) -> list of
+    #   {"title": str, "subtitle": str, "icon": str, "ref": str}
+    # `ref` is passed to the tab's open(ref) hook (see web/js/app.js) when the result is chosen
+    search: Callable[[str], list[dict]] | None = None
+    # optional lifecycle hooks, called by app.main at server start / stop (e.g. a background sampler thread);
+    # a failing hook is logged and never stops the app
+    startup: Callable[[], None] | None = None
+    shutdown: Callable[[], None] | None = None
 
     def defaults(self) -> dict:
         return {f.key: f.default for f in self.settings}

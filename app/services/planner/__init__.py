@@ -1,6 +1,7 @@
 from app.core.registry import Service
 
 from .router import SERVICE_ID, router
+from .search import search
 
 SERVICE = Service(
     id=SERVICE_ID,
@@ -10,4 +11,5 @@ SERVICE = Service(
     order=5,
     router=router,
     background=True,  # reminders fire while any tab is open
+    search=search,
 )

@@ -7,7 +7,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.core import config, context
+from app.core import audit, config, context
 from app.core.jobs import JobConflict
 from app.core.postgres import PostgresConfigError, describe_target, export_csv_script, pg_env
 from app.core.tabular import TabularError
@@ -172,6 +172,8 @@ def ids_write(req: IdsRequest):
         raise HTTPException(400, "no valid integer ids found")
     target = _path(s["ids_file"])
     backup = write_ids_file(target, parsed["ids"])
+    audit.record("pipeline", "ids-write", str(target), env="local",
+                 detail={"count": len(parsed["ids"]), "backup": str(backup) if backup else None})
     return {
         "path": str(target),
         "backup": str(backup) if backup else None,
@@ -205,7 +207,8 @@ def _sql_job(s: dict, step: str, title: str, query: str, out_csv: Path) -> dict:
     sql_file.write_text(query)
     script, display = export_csv_script(sql_file, out_csv)
     cmd = commands.Command(title, script, display)
-    return _start(cmd, step, meta={"output": str(out_csv), "db": describe_target(env)}, env=env)
+    # db target is user@host:port/db, never the password
+    return _start(cmd, step, meta={"output": str(out_csv), "db": describe_target(env), "env": "local"}, env=env)
 
 
 @router.post("/run/{step}")

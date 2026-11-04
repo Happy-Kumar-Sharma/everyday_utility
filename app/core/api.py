@@ -29,6 +29,33 @@ def list_failed_services():
     return context.failed_services
 
 
+@router.get("/search")
+def search(q: str = Query("", max_length=200), limit: int = Query(8, ge=1, le=50)):
+    """Global search (Ctrl+K): asks every service that has a search provider. A failing provider is skipped."""
+    q = q.strip()
+    if not q:
+        return []
+    groups = []
+    for service in context.services.values():
+        if service.search is None:
+            continue
+        try:
+            results = list(service.search(q))[:limit]
+        except Exception as e:  # noqa: BLE001 - one broken provider must not break search
+            results = [{"title": f"search failed: {e}", "subtitle": "", "icon": "⚠️", "ref": ""}]
+        if results:
+            groups.append({"service": service.id, "title": service.title, "icon": service.icon,
+                           "results": [{**r, "service": service.id} for r in results]})
+    return groups
+
+
+@router.get("/audit")
+def audit_log(limit: int = Query(200, ge=1, le=5000), kind: str | None = None, q: str | None = None):
+    from . import audit
+
+    return audit.recent(limit, kind=kind or None, query=q or None)
+
+
 def _service(service_id: str):
     service = context.services.get(service_id)
     if not service:
@@ -41,17 +68,33 @@ def get_settings(service_id: str):
     return context.settings.load(_service(service_id))
 
 
+def _audit_settings(action: str, service_id: str, before: dict, after: dict) -> None:
+    from . import audit
+
+    # keys only: values may be private paths
+    changed = sorted(k for k in after if before.get(k) != after[k])
+    audit.record("settings", action, service_id, detail={"changed": changed})
+
+
 @router.put("/services/{service_id}/settings")
 def save_settings(service_id: str, values: dict):
+    service = _service(service_id)
+    before = context.settings.load(service)
     try:
-        return context.settings.save(_service(service_id), values)
+        after = context.settings.save(service, values)
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
+    _audit_settings("save", service_id, before, after)
+    return after
 
 
 @router.delete("/services/{service_id}/settings")
 def reset_settings(service_id: str):
-    return context.settings.reset(_service(service_id))
+    service = _service(service_id)
+    before = context.settings.load(service)
+    after = context.settings.reset(service)
+    _audit_settings("reset", service_id, before, after)
+    return after
 
 
 # ---- jobs -----------------------------------------------------------------------------------------

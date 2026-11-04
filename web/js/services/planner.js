@@ -1,12 +1,13 @@
-// Planner tab: tasks (status, priority, due, reminders, repeat, tags, checklists), done log, daily notes.
-// background() runs from page load so reminders fire whichever tab is open.
+// Planner tab: tasks (status, priority, due, reminders, repeat, tags, checklists, time tracking), done log,
+// weekly review, daily notes. background() runs from page load so reminders and Pomodoro fire whichever tab is open.
 
 import { api, get, post } from '../core/api.js';
 import { checkbox, segmented } from '../core/components.js';
-import { clear, confirmDialog, debounce, downloadText, h, modal, store, toast, toastError } from '../core/dom.js';
+import { clear, confirmDialog, copyText, debounce, downloadText, h, loadCss, modal, store, toast, toastError } from '../core/dom.js';
 
 const API = '/api/planner';
-const CHANGED = 'planner:changed';  // window event: data changed elsewhere (e.g. reminder acked)
+const CHANGED = 'planner:changed';  // window event after any planner mutation (the Home tab listens too)
+const changed = (source) => window.dispatchEvent(new CustomEvent(CHANGED, { detail: { source } }));
 
 /* ---------------------------------------------------------------- dates (local time, YYYY-MM-DD) */
 const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -25,6 +26,23 @@ function prettyDate(s) {
   return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: sameYear ? undefined : 'numeric' });
 }
 const prettyTime = (epoch) => new Date(epoch * 1000).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+const dayName = (s) => new Date(`${s}T00:00`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+
+/* ---- durations */
+const pad2 = (n) => String(n).padStart(2, '0');
+/** 1h 05m / 12m / <1m */
+function hm(s) {
+  const m = Math.floor((s || 0) / 60);
+  if (m < 1) return s > 0 ? '<1m' : '0m';
+  return m >= 60 ? `${Math.floor(m / 60)}h ${pad2(m % 60)}m` : `${m}m`;
+}
+/** mm:ss, or h:mm:ss past an hour */
+function clockFmt(s) {
+  s = Math.max(0, Math.floor(s));
+  const hh = Math.floor(s / 3600);
+  return `${hh ? `${hh}:` : ''}${pad2(Math.floor((s % 3600) / 60))}:${pad2(s % 60)}`;
+}
+const spent = (t) => (t.time_spent || 0) + (t.timer_started_at ? Math.max(0, Date.now() / 1000 - t.timer_started_at) : 0);
 const toLocalInput = (epoch) => { if (!epoch) return ''; const d = new Date(epoch * 1000); return `${ymd(d)}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 
 /**
@@ -70,20 +88,26 @@ export function background() {
   };
   tick();
   setInterval(tick, 30_000);
+  setInterval(pomoTick, 1000);
 }
 
+function desktopNotify(title, body, tag) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  try {
+    const n = new Notification(title, { body, tag });
+    n.onclick = () => { window.focus(); location.hash = '#/planner'; };
+  } catch { /* some platforms disallow page-created notifications */ }
+}
+
+const ALERT_STYLE = { background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--accent)' };
+
 function showReminder(t) {
-  if ('Notification' in window && Notification.permission === 'granted') {
-    try {
-      const n = new Notification(`⏰ ${t.title}`, { body: t.notes || (t.due ? `Due ${prettyDate(t.due)}` : ''), tag: `planner-${t.id}` });
-      n.onclick = () => { window.focus(); location.hash = '#/planner'; };
-    } catch { /* some platforms disallow page-created notifications */ }
-  }
+  desktopNotify(`⏰ ${t.title}`, t.notes || (t.due ? `Due ${prettyDate(t.due)}` : ''), `planner-${t.id}`);
   const act = async (fn, msg) => {
     try { await fn(); el.remove(); shown.delete(t.id); if (msg) toast(msg, 'ok'); window.dispatchEvent(new Event(CHANGED)); } catch (e) { toastError(e); }
   };
   const snooze = (m) => act(() => post(`${API}/reminders/${t.id}/ack`, { minutes: m }), `Snoozed ${m >= 60 ? `${m / 60} h` : `${m} min`}`);
-  const el = h('div', { class: 'toast', role: 'alert', style: { background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--accent)' } },
+  const el = h('div', { class: 'toast', role: 'alert', style: ALERT_STYLE },
     h('div', { class: 'stack', style: { gap: '8px' } },
       h('b', {}, `⏰ ${t.title}`),
       t.notes && h('span', { class: 'muted small', style: { whiteSpace: 'pre-wrap' } }, t.notes),
@@ -96,21 +120,87 @@ function showReminder(t) {
   document.getElementById('toasts').append(el);
 }
 
+/** Reminder-style toast that stays until a button is pressed (first action is primary), plus a desktop notification. */
+function alertToast(title, body, actions) {
+  desktopNotify(title, body, 'planner-pomodoro');
+  const el = h('div', { class: 'toast', role: 'alert', style: ALERT_STYLE },
+    h('div', { class: 'stack', style: { gap: '8px' } },
+      h('b', {}, title),
+      h('span', { class: 'muted small' }, body),
+      h('div', { class: 'row' }, actions.map((a, i) => h('button', { class: `btn sm ${i === 0 ? 'primary' : ''}`, type: 'button',
+        onclick: async () => { el.remove(); try { await a.run?.(); } catch (e) { toastError(e); } } }, a.label)))));
+  document.getElementById('toasts').append(el);
+}
+
+/* ================================================================ timer + Pomodoro
+ * The server owns the running timer (timer_started_at), so elapsed time survives reloads. Pomodoro phases live
+ * in localStorage and are advanced by background(), so they fire whichever tab is open. */
+const POMO_KEY = 'eu.plan.pomo';        // {on, work, brk} in minutes
+const PHASE_KEY = 'eu.plan.pomoPhase';  // {phase: 'work' | 'break', start: ms, len: min, id, title} or null
+const pomoCfg = () => ({ on: false, work: 25, brk: 5, ...store.get(POMO_KEY, {}) });
+const getPhase = () => store.get(PHASE_KEY, null);
+const setPhase = (p) => store.set(PHASE_KEY, p);
+// a phase keeps the length it started with, so editing the setting mid-interval cannot back-date its end past time worked
+const phaseLen = (p) => p.len ?? (p.phase === 'work' ? pomoCfg().work : pomoCfg().brk);
+const phaseLeft = (p) => phaseLen(p) * 60 - (Date.now() - p.start) / 1000;
+const workPhase = (id, title) => ({ phase: 'work', start: Date.now(), len: pomoCfg().work, id, title });
+
+async function startTimer(id) {
+  const t = await post(`${API}/tasks/${id}/timer`, { action: 'start' });
+  if (pomoCfg().on) setPhase(workPhase(id, t.title));
+  changed();
+}
+
+async function stopTimer(id, at) {
+  await post(`${API}/tasks/${id}/timer`, { action: 'stop', at });
+  const p = getPhase();
+  if (p?.phase === 'work' && p.id === id) setPhase(null);
+  changed();
+}
+
+let pomoChecking = false;
+async function pomoTick() {
+  const p = getPhase();
+  if (pomoChecking || !p || !pomoCfg().on || phaseLeft(p) > 0) return;
+  const resume = { label: `▶ Resume “${p.title}”`, run: () => startTimer(p.id) };
+  if (p.phase === 'work') {
+    // the timer may have been stopped or its task finished where no Planner tab was mounted (Home, a reminder toast)
+    let run;
+    pomoChecking = true;
+    try { run = await get(`${API}/timer`); } catch { return; /* server restarting: retry next tick */ } finally { pomoChecking = false; }
+    if (JSON.stringify(getPhase()) !== JSON.stringify(p)) return;  // another page handled it meanwhile
+    if (run?.id !== p.id) { setPhase(null); changed(); return; }
+    // stop at the interval's end, even if the page was closed when it passed
+    const end = p.start + phaseLen(p) * 60_000;
+    setPhase({ ...p, phase: 'break', start: end, len: pomoCfg().brk });
+    stopTimer(p.id, end / 1000).catch(toastError);
+    alertToast(`🍅 Pomodoro done: ${p.title}`, `Timer stopped. Take a ${pomoCfg().brk} min break.`, [{ label: 'OK' }, { ...resume, label: '▶ Skip break' }]);
+  } else {
+    setPhase(null);
+    changed();
+    alertToast('☕ Break over', `Back to “${p.title}”?`, [resume, { label: 'Later' }]);
+  }
+}
+
 /* ================================================================ tab */
 const VIEWS = [
   { value: 'today', label: '☀️ Today' },
   { value: 'upcoming', label: '📅 Upcoming' },
   { value: 'all', label: '📋 All open' },
   { value: 'done', label: '✅ Done' },
+  { value: 'review', label: '📊 Week' },
   { value: 'notes', label: '📝 Daily notes' },
 ];
 const PRIO_RANK = { high: 0, normal: 1, low: 2 };
+const REVIEW_RANGES = [{ value: 7, label: '7 days' }, { value: 14, label: '14 days' }, { value: 30, label: '30 days' }];
 
 export async function mount(root) {
+  loadCss('/static/css/planner.css');
   let tasks = [];
   let view = store.get('eu.plan.view', 'today');
   let query = '';
   let tagFilter = null;
+  let reviewDays = store.get('eu.plan.reviewDays', 7);
 
   /* ---- quick add */
   const quick = h('input', { type: 'text', placeholder: 'Add a task…   e.g.  Renew SSL cert #ops !high @tomorrow ^monthly   (Enter)',
@@ -133,7 +223,7 @@ export async function mount(root) {
     if (!p.title) return;
     // adding from Today without a date means "today"
     if (!p.due && view === 'today') p.due = today();
-    try { await post(`${API}/tasks`, p); quick.value = ''; quick.dispatchEvent(new Event('input')); await load(); } catch (e) { toastError(e); }
+    try { await post(`${API}/tasks`, p); quick.value = ''; quick.dispatchEvent(new Event('input')); changed(); } catch (e) { toastError(e); }
   }
 
   const notifyBtn = h('button', { class: 'btn sm', type: 'button', hidden: !('Notification' in window) || Notification.permission !== 'default',
@@ -143,24 +233,49 @@ export async function mount(root) {
   const search = h('input', { type: 'text', placeholder: 'Search…', style: { maxWidth: '240px' }, oninput: debounce(() => { query = search.value.trim().toLowerCase(); draw(); }, 120) });
   const tagsEl = h('div', { class: 'chips' });
   const content = h('div', { class: 'stack', style: { gap: '16px' } });
+  const focusEl = h('div', { role: 'region', 'aria-label': 'Focus timer' });
+  const viewSeg = segmented(VIEWS, view, (v) => setView(v));
 
   root.append(
+    focusEl,
     h('div', { class: 'card' }, h('div', { class: 'card-body', style: { gap: '6px' } },
       h('div', { class: 'row', style: { flexWrap: 'nowrap' } }, quick, h('button', { class: 'btn primary', type: 'button', onclick: quickAdd }, '＋ Add'),
         h('button', { class: 'btn', type: 'button', title: 'Add with all fields', onclick: () => editTask(null) }, '⋯')),
       hint)),
     stats,
     h('div', { class: 'row' },
-      segmented(VIEWS, view, (v) => { view = v; store.set('eu.plan.view', v); draw(); }),
+      viewSeg,
       h('span', { style: { flex: 1 } }), notifyBtn,
       h('button', { class: 'btn sm', type: 'button', onclick: exportAll }, '⬇ Export .txt')),
     h('div', { class: 'row' }, search, tagsEl),
     content);
 
-  async function load() {
-    try { tasks = await get(`${API}/tasks`); draw(); } catch (e) { toastError(e); }
+  function setView(v) {
+    view = v;
+    store.set('eu.plan.view', v);
+    viewSeg.value = v;
+    draw();
   }
-  window.addEventListener(CHANGED, load);
+
+  async function load() {
+    try { tasks = await get(`${API}/tasks`); } catch (e) { toastError(e); return; }
+    syncPhase();
+    draw();
+  }
+  // a note autosave must not re-render the note being typed
+  window.addEventListener(CHANGED, (e) => { if (e.detail?.source !== 'note') load(); });
+
+  // keeps the Pomodoro phase in line with the server's timer (stopped by "done", started from another tab, …)
+  function syncPhase() {
+    const p = getPhase();
+    const run = tasks.find((t) => t.timer_started_at);
+    // a break that began after this session started means its auto-stop is still in flight
+    const current = run && p?.id === run.id && (p.phase === 'work' || p.start > run.timer_started_at * 1000);
+    if (run && pomoCfg().on && !current) {
+      // this browser did not see the interval start, so count a fresh one from now rather than back-dating its stop
+      setPhase(workPhase(run.id, run.title));
+    } else if (!run && p?.phase === 'work') setPhase(null);
+  }
 
   /* ---- derived lists */
   const open = () => tasks.filter((t) => t.status !== 'done');
@@ -177,7 +292,7 @@ export async function mount(root) {
     const card = (label, value, cls, onclick) => h('button', { type: 'button', class: 'card stat-card', onclick,
       style: { textAlign: 'left', cursor: 'pointer', font: 'inherit', color: 'inherit' } },
     h('span', { class: 'label' }, label), h('span', { class: 'value', style: cls ? { color: `var(--${cls})` } : null }, value));
-    const go = (v) => () => { view = v; store.set('eu.plan.view', v); rebuildSeg(); draw(); };
+    const go = (v) => () => setView(v);
     clear(stats,
       card('Overdue', o.filter((x) => x.due && x.due < t).length, o.some((x) => x.due && x.due < t) ? 'err' : null, go('today')),
       card('Due today', o.filter((x) => x.due === t).length, null, go('today')),
@@ -185,11 +300,6 @@ export async function mount(root) {
       card('Open', o.length, null, go('all')),
       card('Done today', doneToday, doneToday ? 'ok' : null, go('done')),
       card('Done in 7 days', doneWeek, null, go('done')));
-  }
-  // the view switcher row is rebuilt when a stat card changes the view
-  function rebuildSeg() {
-    const row = root.children[2];
-    row.replaceChild(segmented(VIEWS, view, (v) => { view = v; store.set('eu.plan.view', v); draw(); }), row.firstChild);
   }
 
   function drawTags() {
@@ -208,6 +318,7 @@ export async function mount(root) {
   }
 
   function draw() {
+    drawFocus();
     drawStats();
     drawTags();
     const t = today();
@@ -239,12 +350,174 @@ export async function mount(root) {
         h('div', { class: 'row' }, h('span', { class: 'muted small' }, `${done.length} completed`), h('span', { style: { flex: 1 } }),
           h('button', { class: 'btn sm danger', type: 'button', onclick: async () => {
             if (!(await confirmDialog('Clear old done tasks?', 'Removes completed tasks finished more than 30 days ago. Export first if you want to keep a record.', { okLabel: 'Clear', danger: true }))) return;
-            try { const r = await post(`${API}/tasks/clear-done`, { older_than_days: 30 }); toast(`Removed ${r.removed}`); load(); } catch (e) { toastError(e); }
+            try { const r = await post(`${API}/tasks/clear-done`, { older_than_days: 30 }); toast(`Removed ${r.removed}`); changed(); } catch (e) { toastError(e); }
           } }, 'Clear done > 30 days')),
         done.length ? Object.keys(groups).map((d) => section(prettyDate(d), groups[d])) : h('div', { class: 'notice' }, 'Nothing completed yet.'));
+    } else if (view === 'review') {
+      drawReview();
     } else {
       drawNotes();
     }
+  }
+
+  /* ---- focus bar: running timer, Pomodoro, break countdown */
+  let focusKey = '';
+  let focusTick = null;  // updates the bar's live numbers every second
+  function drawFocus() {
+    const run = tasks.find((t) => t.timer_started_at);
+    const cfg = pomoCfg();
+    const p = getPhase();
+    const brk = !run && cfg.on && p?.phase === 'break' ? p : null;
+    // rebuilt only when its state changes, so its inputs keep focus across re-renders
+    const key = JSON.stringify([run?.id, run?.title, run?.timer_started_at, brk?.start, cfg.on]);
+    if (key === focusKey) return;
+    focusKey = key;
+    focusTick = null;
+    if (brk) drawBreak(brk);
+    else if (run) drawRunning(run, cfg);
+    else clear(focusEl);
+    focusTick?.();
+  }
+
+  function drawRunning(run, cfg) {
+    const session = h('span', { class: 'pl-clock', title: 'This session' });
+    const total = h('span', { class: 'muted small' });
+    const pomoLeft = h('span', { class: 'pill run' });
+    focusTick = () => {
+      session.textContent = clockFmt(Date.now() / 1000 - run.timer_started_at);
+      total.textContent = `total ${hm(spent(run))}`;
+      const ph = getPhase();
+      pomoLeft.hidden = !(cfg.on && ph?.phase === 'work');
+      if (!pomoLeft.hidden) pomoLeft.textContent = `🍅 ${clockFmt(phaseLeft(ph))} left`;
+    };
+    const toggle = h('button', { class: 'btn sm pl-toggle', type: 'button', 'aria-pressed': String(cfg.on),
+      title: 'Work / break intervals: the timer stops when a work interval ends', onclick: () => {
+        const on = !pomoCfg().on;
+        store.set(POMO_KEY, { ...pomoCfg(), on });
+        setPhase(on ? workPhase(run.id, run.title) : null);
+        if (on && 'Notification' in window && Notification.permission === 'default') Notification.requestPermission();
+        drawFocus();
+      } }, '🍅 Pomodoro');
+    const minutes = (key, label) => {
+      const input = h('input', { type: 'number', min: 1, max: 180, value: cfg[key], 'aria-label': `${label} minutes`, onchange: () => {
+        const v = Math.min(180, Math.max(1, Math.round(Number(input.value)) || pomoCfg()[key]));
+        input.value = v;
+        store.set(POMO_KEY, { ...pomoCfg(), [key]: v });
+        focusTick?.();
+      } });
+      return h('label', { title: 'Applies from the next interval' }, label, input, 'min');
+    };
+    clear(focusEl, h('div', { class: 'pl-focus' },
+      h('span', { class: 'pill run' }, 'Focusing'),
+      h('button', { class: 'pl-focus-title', type: 'button', title: 'Open task', onclick: () => editTask(run) }, run.title),
+      session, total,
+      h('span', { class: 'pl-spacer' }),
+      h('div', { class: 'pl-pomo' }, toggle, cfg.on && [minutes('work', 'Work'), minutes('brk', 'Break')], pomoLeft),
+      h('button', { class: 'btn sm primary', type: 'button', onclick: () => stopTimer(run.id).catch(toastError) }, '⏹ Stop')));
+  }
+
+  function drawBreak(brk) {
+    const left = h('span', { class: 'pl-clock' });
+    focusTick = () => { left.textContent = clockFmt(phaseLeft(brk)); };
+    clear(focusEl, h('div', { class: 'pl-focus break' },
+      h('span', { class: 'pill ok' }, '☕ Break'), left,
+      h('span', { class: 'muted small' }, `then back to “${brk.title}”`),
+      h('span', { class: 'pl-spacer' }),
+      h('button', { class: 'btn sm primary', type: 'button', onclick: () => startTimer(brk.id).catch(toastError) }, '▶ Resume now'),
+      h('button', { class: 'btn sm', type: 'button', onclick: () => { setPhase(null); drawFocus(); } }, 'End break')));
+  }
+
+  /* ---- weekly review */
+  async function drawReview() {
+    const days = reviewDays;
+    if (!content.querySelector('.pl-review')) clear(content, h('p', { class: 'muted' }, 'Loading…'));
+    let r;
+    try { r = await get(`${API}/review`, { days, tz: new Date().getTimezoneOffset() }); } catch (e) { toastError(e); return; }
+    if (view !== 'review' || days !== reviewDays) return;  // switched away while loading
+    const byId = new Map(tasks.map((t) => [t.id, t]));
+    const panel = (title, ...body) => h('section', { class: 'card' },
+      h('div', { class: 'card-head' }, h('b', {}, title)), h('div', { class: 'card-body' }, body));
+    const stat = (label, value, cls) => h('div', { class: 'card stat-card' },
+      h('span', { class: 'label' }, label), h('span', { class: 'value', style: cls ? { color: `var(--${cls})` } : null }, value));
+    clear(content, h('div', { class: 'stack pl-review', style: { gap: '16px' } },
+      h('div', { class: 'row' },
+        segmented(REVIEW_RANGES, days, (v) => { reviewDays = v; store.set('eu.plan.reviewDays', v); drawReview(); }),
+        h('span', { class: 'muted small' }, `${dayName(r.start)} – ${dayName(r.end)}`),
+        h('span', { style: { flex: 1 } }),
+        h('button', { class: 'btn sm', type: 'button', onclick: () => copyText(reviewMarkdown(r), 'Review copied as Markdown') }, '📋 Copy as text')),
+      h('div', { class: 'status-grid' },
+        stat('Done', r.done_count, r.done_count ? 'ok' : null),
+        stat('Created', r.created_count),
+        stat('Time focused', hm(r.time_total)),
+        stat('Slipped', r.slipped.length, r.slipped.length ? 'err' : null)),
+      panel('Done per day', doneBars(r)),
+      h('div', { class: 'pl-review-grid' },
+        panel('⏱ Time by tag', tagTimes(r),
+          r.top_tags.length > 0 && h('div', { class: 'chips', 'aria-label': 'Top tags by tasks done' },
+            h('span', { class: 'muted small' }, 'Top tags'), r.top_tags.map((x) => h('span', { class: 'pill' }, `#${x.tag} · ${x.count}`)))),
+        panel(`⚠️ Slipped (${r.slipped.length})`, r.slipped.length
+          ? h('ul', { class: 'pl-list' }, r.slipped.map((x) => slippedItem(x, byId.get(x.id), r.end)))
+          : h('p', { class: 'muted small', style: { margin: 0 } }, 'Nothing overdue or postponed 🎉'))),
+      panel(`✅ Completed (${r.done_count})`, r.done.length
+        ? r.done.map((g) => h('details', { open: g.date === r.end },
+          h('summary', { style: { cursor: 'pointer' } }, h('b', {}, prettyDate(g.date)), h('span', { class: 'muted' }, `  ${g.tasks.length}`)),
+          h('ul', { class: 'pl-list', style: { margin: '8px 0 0 4px' } }, g.tasks.map((t) => h('li', {},
+            h('button', { class: 'pl-item-title', type: 'button', onclick: () => byId.has(t.id) && editTask(byId.get(t.id)) }, t.title),
+            t.time_spent > 0 && h('span', { class: 'pill' }, `⏱ ${hm(t.time_spent)}`),
+            t.tags.map((tag) => h('span', { class: 'pill' }, `#${tag}`)))))))
+        : h('p', { class: 'muted small', style: { margin: 0 } }, 'Nothing completed in this range.'))));
+  }
+
+  function doneBars(r) {
+    const max = Math.max(1, ...r.days.map((d) => d.done));
+    const short = r.days.length <= 14;
+    return h('div', { class: 'pl-bars', role: 'list', 'aria-label': 'Tasks done per day' }, r.days.map((d) => {
+      const label = `${dayName(d.date)}: ${d.done} done`;
+      const dt = new Date(`${d.date}T00:00`);
+      return h('div', { class: `pl-bar ${d.date === r.end ? 'today' : ''}`, role: 'listitem', 'aria-label': label, title: label },
+        h('span', { class: 'pl-bar-track', 'aria-hidden': 'true' }, h('span', { class: 'pl-bar-fill', style: { height: `${(d.done / max) * 100}%` } })),
+        h('span', { class: 'pl-bar-n', 'aria-hidden': 'true' }, String(d.done)),
+        h('span', { class: 'pl-bar-day', 'aria-hidden': 'true' }, short ? dt.toLocaleDateString(undefined, { weekday: 'short' }) : String(dt.getDate())));
+    }));
+  }
+
+  function tagTimes(r) {
+    if (!r.time_by_tag.length) return h('p', { class: 'muted small', style: { margin: 0 } }, 'No time tracked in this range. Use ⏱ on a task.');
+    const max = Math.max(...r.time_by_tag.map((x) => x.seconds));
+    return h('div', { class: 'pl-hbars' }, r.time_by_tag.map((x) => {
+      const name = x.tag === '(untagged)' ? x.tag : `#${x.tag}`;
+      return [h('span', { class: 'small' }, name),
+        h('div', { class: 'pl-hbar', role: 'img', 'aria-label': `${name}: ${hm(x.seconds)}` }, h('span', { style: { width: `${(x.seconds / max) * 100}%` } })),
+        h('span', { class: 'small mono' }, hm(x.seconds))];
+    }));
+  }
+
+  function slippedItem(x, t, end) {
+    return h('li', {},
+      h('button', { class: 'pl-item-title', type: 'button', onclick: () => t && editTask(t) }, x.title),
+      x.due && h('span', { class: `pill ${x.due < end ? 'err' : ''}` }, `📅 ${prettyDate(x.due)}`),
+      x.postponed > 0 && h('span', { class: 'pill warn', title: 'Times the due date was moved later' }, `↷ ${x.postponed}×`),
+      x.due !== today() && h('button', { class: 'btn sm', type: 'button', onclick: () => patch(x, { due: today() }, 'Moved to today') }, '☀️ Today'),
+      h('button', { class: 'btn sm ghost', type: 'button', title: 'Delete', 'aria-label': `Delete “${x.title}”`, onclick: () => deleteTask(x) }, '🗑'));
+  }
+
+  function reviewMarkdown(r) {
+    const tag = (x) => (x === '(untagged)' ? x : `#${x}`);
+    const out = [`## Review ${r.start} → ${r.end}`, '',
+      `- Done: ${r.done_count} · Created: ${r.created_count} · Focused: ${hm(r.time_total)} · Slipped: ${r.slipped.length}`];
+    if (r.top_tags.length) out.push(`- Top tags: ${r.top_tags.map((x) => `#${x.tag} (${x.count})`).join(', ')}`);
+    if (r.time_by_tag.length) out.push(`- Time by tag: ${r.time_by_tag.map((x) => `${tag(x.tag)} ${hm(x.seconds)}`).join(', ')}`);
+    out.push('', '### Done');
+    if (!r.done.length) out.push('- nothing completed');
+    for (const g of r.done) {
+      out.push('', `**${dayName(g.date)}**`);
+      for (const t of g.tasks) out.push(`- ${t.title}${t.time_spent > 0 ? ` (${hm(t.time_spent)})` : ''}${t.tags.map((x) => ` #${x}`).join('')}`);
+    }
+    if (r.slipped.length) {
+      out.push('', '### Slipped');
+      for (const t of r.slipped) out.push(`- ${t.title}${t.due ? ` — due ${t.due}` : ''}${t.postponed ? `, postponed ${t.postponed}×` : ''}`);
+    }
+    return `${out.join('\n')}\n`;
   }
 
   /* ---- task row */
@@ -252,8 +525,26 @@ export async function mount(root) {
     return api(`${API}/tasks/${t.id}`, { method: 'PATCH', body }).then((r) => {
       if (r.spawned) toast(`Next “${r.spawned.title}” scheduled for ${prettyDate(r.spawned.due)}`, 'ok');
       else if (msg) toast(msg, 'ok');
-      return load();
+      changed();
     }).catch(toastError);
+  }
+
+  async function deleteTask(t) {
+    if (!(await confirmDialog('Delete task?', `“${t.title}”`, { okLabel: 'Delete', danger: true }))) return;
+    try { await api(`${API}/tasks/${t.id}`, { method: 'DELETE' }); changed(); } catch (e) { toastError(e); }
+  }
+
+  // live numbers: elements with data-since (epoch) count up from data-base seconds
+  const liveSpan = (since, base, fmtName) => h('span', { dataset: { since, base, fmt: fmtName } },
+    (fmtName === 'hm' ? hm : clockFmt)(base + Date.now() / 1000 - since));
+
+  function timerButton(t) {
+    if (t.timer_started_at) {
+      return h('button', { class: 'btn sm pl-timer on', type: 'button', title: 'Stop timer', 'aria-label': `Stop timer for “${t.title}”`,
+        onclick: () => stopTimer(t.id).catch(toastError) }, '⏹ ', liveSpan(t.timer_started_at, 0, 'clock'));
+    }
+    return h('button', { class: 'btn sm ghost pl-timer', type: 'button', title: 'Start timer (stops any other)', 'aria-label': `Start timer for “${t.title}”`,
+      onclick: () => startTimer(t.id).catch(toastError) }, '⏱');
   }
 
   function taskRow(t) {
@@ -278,15 +569,15 @@ export async function mount(root) {
           t.repeat !== 'none' && h('span', { class: 'pill', title: `repeats ${t.repeat}` }, `🔁 ${t.repeat}`),
           t.remind_at && !done && h('span', { class: `pill ${t.reminded ? '' : 'warn'}`, title: t.reminded ? 'reminder shown' : 'reminder pending' }, `🔔 ${prettyTime(t.remind_at)}`),
           t.checklist.length > 0 && h('span', { class: `pill ${checked === t.checklist.length ? 'ok' : ''}` }, `☑ ${checked}/${t.checklist.length}`),
+          spent(t) > 0 && h('span', { class: 'pill', title: 'Time spent' }, '⏱ ',
+            t.timer_started_at ? liveSpan(t.timer_started_at, t.time_spent || 0, 'hm') : hm(t.time_spent)),
           t.tags.map((tag) => h('span', { class: 'pill' }, `#${tag}`)),
           t.notes && h('span', { class: 'muted small', title: t.notes }, '📝'))),
         !done && h('button', { class: 'btn sm ghost', type: 'button', title: t.status === 'doing' ? 'Back to todo' : 'Start (in progress)',
           onclick: () => patch(t, { status: t.status === 'doing' ? 'todo' : 'doing' }) }, t.status === 'doing' ? '⏸' : '▶'),
+        !done && timerButton(t),
         !done && t.due !== tday && h('button', { class: 'btn sm ghost', type: 'button', title: 'Move to today', onclick: () => patch(t, { due: tday }, 'Moved to today') }, '☀️'),
-        h('button', { class: 'btn sm ghost', type: 'button', title: 'Delete', onclick: async () => {
-          if (!(await confirmDialog('Delete task?', `“${t.title}”`, { okLabel: 'Delete', danger: true }))) return;
-          try { await api(`${API}/tasks/${t.id}`, { method: 'DELETE' }); load(); } catch (e) { toastError(e); }
-        } }, '🗑')),
+        h('button', { class: 'btn sm ghost', type: 'button', title: 'Delete', onclick: () => deleteTask(t) }, '🗑')),
       // checklist is tickable straight from the list
       t.checklist.length > 0 && !done && h('div', { class: 'stack', style: { gap: '2px', margin: '6px 0 0 30px' } },
         t.checklist.map((item) => checkbox(h('span', { style: { textDecoration: item.done ? 'line-through' : 'none', color: item.done ? 'var(--muted)' : 'inherit' } }, item.text),
@@ -334,7 +625,7 @@ export async function mount(root) {
         if (!t || d.remind_at !== t.remind_at) body.remind_at = d.remind_at;  // re-arms the reminder only when changed
         try {
           if (t) await patch(t, body, 'Saved');
-          else { await post(`${API}/tasks`, body); toast('Added', 'ok'); load(); }
+          else { await post(`${API}/tasks`, body); toast('Added', 'ok'); changed(); }
           close();
         } catch (ex) { toastError(ex); }
       } },
@@ -365,7 +656,10 @@ export async function mount(root) {
     const index = h('div', { class: 'chips' });
     let dirty = false;
     const save = debounce(async () => {
-      try { await api(`${API}/notes/${noteDay}`, { method: 'PUT', body: { text: area.value } }); dirty = false; status.textContent = 'Saved'; loadIndex(); } catch (e) { toastError(e); }
+      try {
+        await api(`${API}/notes/${noteDay}`, { method: 'PUT', body: { text: area.value } });
+        dirty = false; status.textContent = 'Saved'; loadIndex(); changed('note');
+      } catch (e) { toastError(e); }
     }, 700);
     area.addEventListener('input', () => { dirty = true; status.textContent = 'Saving…'; save(); });
     area.addEventListener('blur', () => { if (dirty) save(); });
@@ -394,8 +688,46 @@ export async function mount(root) {
     try { downloadText(await post(`${API}/export`), `planner_export_${today()}.txt`); } catch (e) { toastError(e); }
   }
 
+  /* ---- deep links from global search / Home: 'new', 'task:<id>', 'note:<YYYY-MM-DD>' */
+  function inView(t, v) {
+    const tday = today();
+    if (t.status === 'done') return v === 'done' || (v === 'today' && !!t.done_at && ymd(new Date(t.done_at * 1000)) === tday);
+    if (v === 'all') return true;
+    if (v === 'upcoming') return !!t.due && t.due > tday;
+    return v === 'today' && (!t.due || t.due <= tday || t.status === 'doing');
+  }
+
+  async function openRef(ref) {
+    ref = String(ref || '');
+    if (ref === 'new') { editTask(null); return; }
+    if (ref.startsWith('note:') && /^\d{4}-\d{2}-\d{2}$/.test(ref.slice(5))) {
+      noteDay = ref.slice(5);
+      setView('notes');
+      return;
+    }
+    if (!ref.startsWith('task:')) return;
+    await load();
+    const t = tasks.find((x) => x.id === ref.slice(5));
+    if (!t) { toast('That task no longer exists', 'err'); return; }
+    // clear filters so the task is visible behind the editor
+    query = ''; search.value = ''; tagFilter = null;
+    if (inView(t, view)) draw();
+    else setView(t.status === 'done' ? 'done' : 'all');
+    editTask(t);
+  }
+
   await load();
   // re-render every minute so "today" / overdue roll over at midnight without a reload
-  setInterval(() => { if (root.isConnected && !root.closest('[hidden]') && view !== 'notes') draw(); }, 60_000);
-  return { onShow: load };
+  setInterval(() => { if (root.isConnected && !root.closest('[hidden]') && view !== 'notes' && view !== 'review') draw(); }, 60_000);
+  const ticker = setInterval(() => {
+    if (!root.isConnected) { clearInterval(ticker); return; }
+    if (root.closest('[hidden]')) return;
+    drawFocus();  // picks up phase changes made by background() (cheap when nothing changed)
+    focusTick?.();
+    const now = Date.now() / 1000;
+    for (const el of root.querySelectorAll('[data-since]')) {
+      el.textContent = (el.dataset.fmt === 'hm' ? hm : clockFmt)(Number(el.dataset.base) + now - Number(el.dataset.since));
+    }
+  }, 1000);
+  return { onShow: load, open: openRef };
 }

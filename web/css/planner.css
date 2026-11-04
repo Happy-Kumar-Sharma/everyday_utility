@@ -1,0 +1,43 @@
+/* Planner extras: focus bar (timer + Pomodoro), timer buttons, weekly review chart. */
+
+.pl-focus { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 14px;
+  border: 1px solid var(--accent); border-radius: var(--radius); background: var(--accent-soft); }
+.pl-focus.break { border-color: var(--ok); background: var(--ok-soft); }
+.pl-focus .pl-focus-title { font: inherit; font-weight: 600; color: var(--text); background: none; border: 0; padding: 0;
+  cursor: pointer; text-align: left; min-width: 0; overflow-wrap: anywhere; }
+.pl-focus .pl-focus-title:hover { text-decoration: underline; }
+.pl-clock { font-family: var(--mono); font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pl-pomo { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.pl-pomo input[type="number"] { width: 4.5em; padding: 3px 6px; }
+.pl-pomo label { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
+.pl-toggle[aria-pressed="true"] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.pl-spacer { flex: 1; }
+
+.pl-timer { font-variant-numeric: tabular-nums; }
+.pl-timer.on { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+
+/* weekly review: done per day, pure DOM bars */
+.pl-bars { display: flex; align-items: flex-end; gap: 4px; height: 140px; padding-top: 4px; }
+.pl-bar { flex: 1 1 0; min-width: 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end;
+  align-items: center; gap: 2px; }
+.pl-bar-track { flex: 1; min-height: 0; width: 100%; display: flex; align-items: flex-end; justify-content: center; }
+.pl-bar-fill { width: 100%; max-width: 40px; min-height: 2px; border-radius: 4px 4px 0 0; background: var(--accent); }
+.pl-bar.today .pl-bar-fill { background: var(--ok); }
+.pl-bar-n { font-size: 11px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pl-bar-day { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; max-width: 100%; }
+
+.pl-hbars { display: grid; grid-template-columns: minmax(70px, max-content) 1fr max-content; gap: 6px 10px; align-items: center; }
+.pl-hbar { height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
+.pl-hbar > span { display: block; height: 100%; background: var(--accent); }
+
+.pl-review-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.pl-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.pl-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.pl-list .pl-item-title { flex: 1 1 160px; min-width: 0; overflow-wrap: anywhere; font: inherit; color: inherit;
+  background: none; border: 0; padding: 0; text-align: left; cursor: pointer; }
+.pl-list .pl-item-title:hover { text-decoration: underline; }
+
+@media (max-width: 600px) {
+  .pl-bars { height: 110px; }
+  .pl-focus .pl-spacer { display: none; }
+}

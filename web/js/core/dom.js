@@ -118,3 +118,9 @@ export const fmt = {
     return hh ? `${hh}h ${mm}m` : mm ? `${mm}m ${ss}s` : `${ss}s`;
   },
 };
+
+/** Load a feature's own stylesheet once (each tab ships its CSS next to app.css instead of editing it). */
+export function loadCss(href) {
+  if (document.querySelector(`link[data-eu-css="${href}"]`)) return;
+  document.head.append(h('link', { rel: 'stylesheet', href, dataset: { euCss: href } }));
+}

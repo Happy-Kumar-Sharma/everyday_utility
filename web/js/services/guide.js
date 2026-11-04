@@ -30,6 +30,23 @@ export async function mount(root) {
       ),
     ]],
 
+    ['home', '🏠 Home & Ctrl+K', () => [
+      p(b('Home'), ' is the start page: today’s tasks (tick them off), the running focus timer, the next reminder, jobs, backup age, favourite / recent library items and recent activity — plus ',
+        b('🖥 screen time today'), ', ', b('💧 water'), ' and the ', b('🗣 standup'), ' card. It refreshes on its own.'),
+      ul(
+        [b('Screen time'), ' counts minutes you are actually active at the computer (GNOME idle time; locked / idle screens don’t count). Only minute counts are stored — nothing about what you do. Hour-by-hour bars, vs yesterday, and a break nudge after a long session.'],
+        [b('Water'), ' — “+1 glass” (− to undo), daily goal, 7-day history, and a reminder during work hours when it’s been a while.'],
+        [b('Standup'), ' — at your standup time a reminder pops up with a ready summary built from the Planner (yesterday’s done tasks, today’s plan, blockers incl. failed jobs): 📋 Copy, Done, Skip or Snooze.'],
+        ['Goals, intervals, work hours, standup time/days and the idle threshold: Home → ⚙ Settings. Reminders also pop up on other tabs.'],
+      ),
+      p(b('🔎 Search everything'), ' — press ', code('Ctrl K'), ' (', code('⌘ K'), ' on Mac) or click Search in the sidebar:'),
+      ul(
+        ['Finds tasks, daily notes, library items, logins (title / URL / username — never passwords), env repos and files (variable names only), dev tools and recent activity.'],
+        ['Also tabs and actions: New task, New library item, Add login, Create backup, Show jobs, Toggle theme.'],
+        ['↑ ↓ to move, Enter to open (it jumps straight to the item), Esc to close. Recent picks show when the box is empty.'],
+      ),
+    ]],
+
     ['planner', '✅ Planner', () => [
       p('Your daily list: tasks, reminders, checklists, repeating chores, a done log and daily notes.'),
       ul(
@@ -44,6 +61,30 @@ export async function mount(root) {
           'Click “🔔 Enable desktop notifications” once to also get system notifications. The app must be running and open in a browser tab.'],
         [b('Views'), ': Today · Upcoming · All open · Done (grouped by day, “Clear done > 30 days”) · Daily notes (autosaved, one per day).'],
         [b('⬇ Export .txt'), ' — all open tasks, the done log and daily notes as one text file.'],
+        [b('⏱ Time tracking'), ' — ▶ on a task starts its timer (only one runs at a time); the focus bar on top shows it ticking. Time spent shows on the task and in the export.'],
+        [b('🍅 Pomodoro'), ' — toggle it in the focus bar (default 25 / 5 min, editable); you get a notification when a work block ends and the timer stops on its own.'],
+        [b('📊 Week'), ' — weekly review: done per day, created vs completed, time focused per tag, slipped tasks (overdue or postponed) with quick fixes, and “Copy as text” for a retro.'],
+        [b('Failed job → task'), ' — when a background job fails, its log panel has “➕ Create task” (high priority, due today, with the log link).'],
+      ),
+    ]],
+
+    ['devtools', '🛠 Dev Tools', () => [
+      p('Everyday converters that run entirely in your browser (nothing is sent anywhere, inputs are not saved):'),
+      ul(
+        [b('JSON'), ' format / minify / validate (with line:column) / sort keys / structural diff — warns when big integers would lose precision.'],
+        [b('Text diff'), ' side-by-side or unified · ', b('Base64'), ' (URL-safe, files) · ', b('JWT'), ' decode with expiry badge (signature not verified).'],
+        [b('Time'), ' epoch ↔ date (s / ms / µs / ns auto-detected, timezones) · ', b('UUID'), ' v4 in bulk · ', b('URL'), ' encode / decode / parse with editable query params.'],
+        [b('Regex'), ' tester with highlighted matches, groups and replace preview (runaway patterns are stopped) · ', b('Hash'), ' SHA-1/256/384/512 for text or files · ', b('Text'), ' case conversion, counts, sort / unique / trim lines.'],
+        ['Jump to a tool with Ctrl K, e.g. “jwt” or “epoch”.'],
+      ),
+    ]],
+
+    ['activity', '🧾 Activity (audit log)', () => [
+      p('A record of what ran and what changed: background jobs (start / finish with exit code), pipeline steps and the database they used, library runs and edits, logins-file and env-file actions, backups, settings changes, remote logins.'),
+      ul(
+        ['Names, paths, titles and counts only — never passwords, env values or file contents.'],
+        ['Filter by kind, status, environment (prod / staging / local) and time range; search; expand an event for details.'],
+        ['Export as text or JSONL. Stored in ', code(`${info.data_dir}/audit/audit.jsonl`), ' (included in data backups).'],
       ),
     ]],
 
@@ -107,6 +148,26 @@ export async function mount(root) {
       ),
     ]],
 
+    ['autostart', '⚡ Start on login', () => [
+      p('Run the app as a user service so it is always up (and reminders always fire):'),
+      codeBlock(`cd ${R}\nbash scripts/install_service.sh --print     # preview the unit\nbash scripts/install_service.sh             # install + start\nsystemctl --user status everyday-utility\njournalctl --user -u everyday-utility -f    # logs`),
+      p('Remove it with ', code('bash scripts/install_service.sh --uninstall'), '. Settings for the service (port, data dir, remote hosts) go in ', code('~/.config/everyday-utility.env'), '.'),
+      p('To keep it running after you log out: ', code('loginctl enable-linger $USER'), ' (optional).'),
+    ]],
+
+    ['remote', '📱 Phone access (Tailscale)', () => [
+      p('Off by default. When enabled, the app stays bound to 127.0.0.1 and ', code('tailscale serve'), ' gives your own devices an HTTPS address; every remote request needs a password. On this computer nothing changes.'),
+      ul(
+        ['Install Tailscale on the computer and phone (same account), enable MagicDNS + HTTPS certificates in the admin console.'],
+        [code('tailscale serve --bg 8765'), ' → note the ', code('https://<machine>.<tailnet>.ts.net'), ' address.'],
+        ['Put ', code('EU_REMOTE_HOSTS=<machine>.<tailnet>.ts.net'), ' in ', code('~/.config/everyday-utility.env'), '.'],
+        ['Set a password (10+ chars): ', code('set -a; . ~/.config/everyday-utility.env; set +a; python3 -m app.core.auth set-password'), ', then restart the app.'],
+        ['Open the address on the phone, log in, add it to the home screen. 🚪 Log out is in the sidebar.'],
+        ['Turn off: ', code('tailscale serve reset'), ' and ', code('python3 -m app.core.auth disable'), '. Full walkthrough: ', code('scripts/tailscale_remote.md'), '.'],
+      ),
+      h('div', { class: 'notice warn' }, 'Remote users get the whole app, including running shell commands — use a strong password and only your own tailnet.'),
+    ]],
+
     ['data', '📁 Where your data lives', () => [
       p('All app data is in ', code(info.data_dir), ' (git-ignored). Your logins file: ',
         info.credentials_file ? code(info.credentials_file) : h('span', { class: 'muted' }, 'not chosen yet'), '.'),
@@ -161,6 +222,14 @@ export async function mount(root) {
     h('section', { class: 'card', dataset: { sec: id } }, h('div', { class: 'card-head' }, h('h2', {}, title)),
       h('div', { class: 'card-body', style: { gap: '10px' } }, build()))));
   root.append(h('div', { class: 'guide-layout' }, toc, body));
+  // open(ref) from Ctrl+K / Home / deep links: ref is a section id, e.g. 'backup'
+  return {
+    open(ref) {
+      const sec = root.querySelector(`[data-sec="${CSS.escape(ref)}"]`);
+      sec?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      sec?.querySelector('input, button')?.focus({ preventScroll: true });
+    },
+  };
 }
 
 function backupSection(info) {

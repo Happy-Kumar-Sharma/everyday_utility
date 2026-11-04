@@ -36,7 +36,7 @@ WHERE id.id IN ({{ids}})
     {
         "collection": "Commands", "name": "migrate_prod_images_to_local", "ext": "sh",
         "meta": {"description": "Copy images for var/prod_to_local_image_ids.txt from prod into local ai_cdb", "tags": ["pipeline"]},
-        "content": """cd ~/workspace/carscan.ai.centralizeddatabase
+        "content": """cd ~/workspace/your-database-repo
 source venv/bin/activate
 python var/prod_to_local_images_migration.py
 """,
@@ -44,17 +44,17 @@ python var/prod_to_local_images_migration.py
     {
         "collection": "Commands", "name": "predict_batched", "ext": "sh",
         "meta": {"description": "Batched YoloV11 predictions from a CSV (resumable)", "tags": ["pipeline", "gpu"]},
-        "content": """cd ~/workspace/carscan.ai.services_backup/Local_Model_YoloV11
+        "content": """cd ~/workspace/your-model-repo/Local_Model_YoloV11
 source ../venv/bin/activate
 export LD_LIBRARY_PATH=/usr/lib/wsl/lib:${LD_LIBRARY_PATH:-}
 python3 predict_from_csv_batched.py -i {{input_csv:../20k_images_latest_for_pred.csv}} -o {{output_jsonl:local_20k_pred_parallel.jsonl}} \\
-  --bucket prod-carscan-image-datasets --prefetch-workers 16 --queue-size 32
+  --bucket {{bucket:your-image-bucket}} --prefetch-workers 16 --queue-size 32
 """,
     },
     {
         "collection": "Commands", "name": "predict_single_model", "ext": "sh",
         "meta": {"description": "Single-model predictions (debugging)", "tags": ["pipeline", "gpu"]},
-        "content": """cd ~/workspace/carscan.ai.services_backup
+        "content": """cd ~/workspace/your-model-repo
 source venv/bin/activate
 cd Local_Model_YoloV11/
 export LD_LIBRARY_PATH=/usr/lib/wsl/lib:${LD_LIBRARY_PATH:-}
@@ -64,7 +64,7 @@ CUDA_LAUNCH_BLOCKING=1 python3 predict_from_csv.py
     {
         "collection": "Commands", "name": "load_predictions_jsonl", "ext": "sh",
         "meta": {"description": "Load the predictions JSONL into local ai_cdb", "tags": ["pipeline"]},
-        "content": """cd ~/workspace/carscan.ai.centralizeddatabase
+        "content": """cd ~/workspace/your-database-repo
 source venv/bin/activate
 python var/load_local_predictions_jsonl.py
 """,

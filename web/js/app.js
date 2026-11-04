@@ -1,12 +1,14 @@
-// App shell: sidebar navigation, hash routing, lazy-loaded service tabs, jobs drawer, theme.
+// App shell: sidebar navigation, hash routing, lazy-loaded service tabs, jobs drawer, theme, Ctrl+K palette.
 //
 // A service tab is web/js/services/<service-id>.js exporting `mount(container, ctx)`.
-// It may return { onShow() } to refresh when its tab becomes visible again.
+// It may return { onShow() } to refresh when its tab becomes visible again, and { open(ref) } to show one
+// thing (a search result, 'new', …): open(serviceId, ref) below, the palette and #/<id>?ref=<ref> links call it.
 // Tabs are mounted once and kept alive, so running jobs keep streaming while you switch tabs.
 
 import { get } from './core/api.js';
-import { clear, fmt, h, modal, store, toastError } from './core/dom.js';
+import { clear, fmt, h, modal, store, toast, toastError } from './core/dom.js';
 import { jobConsole, statusPill } from './core/components.js';
+import { createPalette } from './core/palette.js';
 
 const nav = document.getElementById('nav');
 const view = document.getElementById('view');
@@ -33,6 +35,7 @@ async function boot() {
       nav.append(h('div', { class: 'nav-item muted', title: f.traceback }, h('span', { class: 'nav-icon' }, '⚠️'), h('span', {}, `${f.name} (failed)`)));
     }
   }).catch(() => {});
+  setupPalette();
   window.addEventListener('hashchange', route);
   route();
   pollJobs();
@@ -48,12 +51,35 @@ function startBackground() {
   }
 }
 
+// #/<id> or #/<id>?ref=<urlencoded>: the ref is handed to the tab's open() once, then dropped from the URL
 async function route() {
-  const id = location.hash.replace(/^#\/?/, '') || store.get('eu.lastTab', services[0]?.id);
+  const [path, query = ''] = location.hash.replace(/^#\/?/, '').split('?');
+  const id = path || store.get('eu.lastTab', services[0]?.id);
+  const ref = new URLSearchParams(query).get('ref');
   const service = services.find((s) => s.id === id) || services[0];
   if (!service) return;
-  currentId = service.id;
   if (location.hash !== `#/${service.id}`) history.replaceState(null, '', `#/${service.id}`);
+  const entry = await show(service);
+  if (ref !== null && service.id === id) await callOpen(service, entry, ref);
+}
+
+/** Navigate to a tab (adding a history entry) and, with a ref, ask it to open that item. */
+async function open(serviceId, ref) {
+  const service = services.find((s) => s.id === serviceId);
+  if (!service) return toast(`No “${serviceId}” tab`, 'err');
+  if (location.hash !== `#/${service.id}`) history.pushState(null, '', `#/${service.id}`);  // no hashchange: shown here
+  const entry = await show(service);
+  if (ref !== undefined && ref !== null && ref !== '') await callOpen(service, entry, ref);
+}
+
+async function callOpen(service, entry, ref) {
+  if (!entry.hooks?.open) return toast(`${service.title} cannot open “${ref}”`, 'err');
+  try { await entry.hooks.open(ref); } catch (e) { toastError(e); }
+}
+
+// shows a tab, mounting it on first use; resolves with its { panel, hooks } once mounted
+async function show(service) {
+  currentId = service.id;
   store.set('eu.lastTab', service.id);
 
   for (const a of nav.children) a.classList.toggle('active', a.dataset.id === service.id);
@@ -68,18 +94,47 @@ async function route() {
     view.append(panel);
     entry = { panel, hooks: null };
     mounted.set(service.id, entry);
-    try {
-      const mod = await import(`./services/${service.id}.js`);
-      entry.hooks = (await mod.mount(panel, { service })) || null;
-    } catch (e) {
-      console.error(e);
-      panel.append(h('div', { class: 'notice err' }, `Failed to load this tab: ${e.message}`));
-    }
+    entry.ready = (async () => {
+      try {
+        const mod = await import(`./services/${service.id}.js`);
+        entry.hooks = (await mod.mount(panel, { service, open })) || null;
+      } catch (e) {
+        console.error(e);
+        panel.append(h('div', { class: 'notice err' }, `Failed to load this tab: ${e.message}`));
+      }
+    })();
   } else {
     entry.hooks?.onShow?.();
   }
+  await entry.ready;  // also when a second open() arrives while the first mount is still loading
   // the user may have switched tabs while this one was loading
   if (currentId === service.id) entry.panel.hidden = false;
+  return entry;
+}
+
+/* ---------- command palette (Ctrl+K / Cmd+K) ---------- */
+function setupPalette() {
+  const has = (id) => services.some((s) => s.id === id);
+  const actions = [
+    { id: 'new-task', title: 'New task', icon: '✅', hint: 'Planner', run: () => open('planner', 'new'), service: 'planner' },
+    { id: 'new-library-item', title: 'New library item', icon: '📚', hint: 'Library', run: () => open('library', 'new'), service: 'library' },
+    { id: 'add-login', title: 'Add login', icon: '🔑', hint: 'Manager · Logins', run: () => open('manager', 'new-login'), service: 'manager' },
+    { id: 'backup', title: 'Create backup', icon: '💾', hint: 'Guide', run: () => open('guide', 'backup'), service: 'guide' },
+    { id: 'theme', title: 'Toggle theme', icon: '🌓', hint: 'Light / dark', run: toggleTheme },
+    { id: 'jobs', title: 'Show jobs', icon: '⚙️', hint: 'Background jobs drawer', run: () => document.getElementById('jobs-btn').click() },
+  ].filter((a) => !a.service || has(a.service));
+  const palette = createPalette({ services, actions, open });
+  const mac = /Mac|iPhone|iPad/.test(navigator.platform);
+  nav.parentNode.insertBefore(h('button', { class: 'nav-item pal-trigger', type: 'button', title: 'Search everything',
+    'aria-keyshortcuts': mac ? 'Meta+K' : 'Control+K', onclick: () => palette.show() },
+  h('span', { class: 'nav-icon' }, '🔎'), h('span', {}, 'Search'),
+  h('span', { class: 'pal-keys' }, h('kbd', {}, mac ? '⌘' : 'Ctrl'), h('kbd', {}, 'K'))), nav);
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      palette.toggle();
+    }
+  });
 }
 
 /* ---------- jobs indicator + drawer ---------- */
@@ -117,11 +172,12 @@ document.getElementById('jobs-btn').addEventListener('click', () => modal('Jobs'
 }, { drawer: true }));
 
 /* ---------- theme ---------- */
-document.getElementById('theme-btn').addEventListener('click', () => {
+function toggleTheme() {
   const root = document.documentElement;
   const dark = root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
   root.dataset.theme = dark ? 'light' : 'dark';
   store.set('eu.theme', root.dataset.theme);
-});
+}
+document.getElementById('theme-btn').addEventListener('click', toggleTheme);
 
 boot();

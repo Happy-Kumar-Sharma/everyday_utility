@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Log in · Everyday Utility</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧰</text></svg>">
+  <!-- the only asset served before login; everything else here is inline -->
+  <link rel="stylesheet" href="/static/css/app.css">
+  <script>
+    try { const t = JSON.parse(localStorage.getItem('eu.theme')); if (t) document.documentElement.dataset.theme = t; } catch {}
+  </script>
+  <style>
+    body { min-height: 100vh; display: grid; place-items: center; padding: 16px; box-sizing: border-box; }
+    .login { width: 100%; max-width: 360px; }
+    .login .brand { padding: 0; }
+    .login .btn { justify-content: center; }
+  </style>
+</head>
+<body>
+  <main class="card login">
+    <div class="card-head"><div class="brand"><span class="brand-icon">🧰</span><span>Everyday Utility</span></div></div>
+    <form id="form" class="card-body" novalidate>
+      <label class="field">Password
+        <input id="password" type="password" name="password" autocomplete="current-password" required autofocus>
+      </label>
+      <div id="msg" class="notice err" role="alert" hidden></div>
+      <button id="submit" class="btn primary" type="submit">Log in</button>
+      <p class="muted small" style="margin:0">Remote access. Set or change the password on the computer with
+        <code class="mono">python3 -m app.core.auth set-password</code>.</p>
+    </form>
+  </main>
+  <script>
+    const form = document.getElementById('form');
+    const input = document.getElementById('password');
+    const msg = document.getElementById('msg');
+    const button = document.getElementById('submit');
+
+    // resolve like the browser does (tabs/newlines stripped, "\" read as "/") and return the absolute URL:
+    // a path like "//evil.com" (e.g. from "/.//evil.com") would be protocol-relative again
+    function nextPath() {
+      try {
+        const u = new URL(new URLSearchParams(location.search).get('next') || '/', location.origin);
+        return u.origin === location.origin ? u.href : '/';
+      } catch { return '/'; }
+    }
+
+    function show(text) { msg.textContent = text; msg.hidden = !text; }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!input.value) { show('Enter the password.'); input.focus(); return; }
+      button.disabled = true;
+      show('');
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-everyday-utility': '1' },
+          body: JSON.stringify({ password: input.value }),
+        });
+        if (res.ok) { location.replace(nextPath()); return; }
+        if (res.status === 429) {
+          const secs = Number(res.headers.get('retry-after')) || 60;
+          show(`Too many failed attempts. Try again in ${Math.ceil(secs / 60)} min.`);
+        } else if (res.status === 401) {
+          show('Wrong password.');
+        } else {
+          const data = await res.json().catch(() => null);
+          show((data && typeof data.detail === 'string' && data.detail) || `Login failed (${res.status}).`);
+        }
+      } catch {
+        show('Could not reach the server.');
+      }
+      button.disabled = false;
+      input.select();
+    });
+  </script>
+</body>
+</html>

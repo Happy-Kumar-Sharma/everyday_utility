@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from typing import Literal
+
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
@@ -33,6 +35,11 @@ class ClearDone(BaseModel):
     older_than_days: int = Field(30, ge=0)
 
 
+class TimerAction(BaseModel):
+    action: Literal["start", "stop"]
+    at: float | None = None  # back-dated stop (epoch seconds), e.g. when a Pomodoro interval ended
+
+
 @router.get("/tasks")
 def list_tasks():
     return store.tasks()
@@ -53,6 +60,21 @@ def update_task(task_id: str, patch: dict):
 def delete_task(task_id: str):
     _call(store.delete, task_id)
     return {"ok": True}
+
+
+@router.post("/tasks/{task_id}/timer")
+def task_timer(task_id: str, req: TimerAction):
+    return _call(store.timer, task_id, req.action, req.at)
+
+
+@router.get("/timer")
+def running_timer():
+    return store.running()
+
+
+@router.get("/review")
+def review(days: int = Query(7, ge=1, le=90), tz: int | None = Query(None, ge=-14 * 60, le=14 * 60)):
+    return store.review(days, tz)
 
 
 @router.post("/tasks/clear-done")

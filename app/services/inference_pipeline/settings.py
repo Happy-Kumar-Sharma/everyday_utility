@@ -1,14 +1,17 @@
-"""User-editable settings for the inference pipeline (persisted via the core settings store)."""
+"""User-editable settings for the inference pipeline (persisted via the core settings store).
+
+The defaults are placeholders; your real repo paths and bucket live in the git-ignored
+data/settings/inference-pipeline.json (edit them in the tab's ⚙ Settings)."""
 
 from app.core.registry import SettingField as F
 
-AICDB = "~/workspace/carscan.ai.centralizeddatabase"
-SERVICES = "~/workspace/carscan.ai.services_backup"
+AICDB = "~/workspace/your-database-repo"
+SERVICES = "~/workspace/your-model-repo"
 MODEL_DIR = f"{SERVICES}/Local_Model_YoloV11"
 
 SETTINGS = (
     # repos & environments
-    F("aicdb_repo", "AI CDB repo", AICDB, "path", "carscan.ai.centralizeddatabase checkout", "Repos"),
+    F("aicdb_repo", "AI CDB repo", AICDB, "path", "checkout with the migration / loader scripts in var/", "Repos"),
     F("aicdb_venv", "AI CDB venv", f"{AICDB}/venv", "path", "activated before the migration / load scripts", "Repos"),
     F("local_env_file", "Local DB credentials", f"{AICDB}/var/local_credentials.sh", "path",
       "export POSTGRES_* file used for the SQL steps and the loader", "Repos"),
@@ -23,7 +26,7 @@ SETTINGS = (
     F("pred_output_jsonl", "Predictions JSONL", f"{MODEL_DIR}/local_20k_pred_parallel.jsonl", "path",
       "step 4 appends to it (resumable), step 5 loads it", "Files"),
     # prediction knobs
-    F("bucket", "S3 bucket", "prod-carscan-image-datasets", "text", "", "Prediction"),
+    F("bucket", "S3 bucket", "your-image-bucket", "text", "", "Prediction"),
     F("prefetch_workers", "Prefetch workers", 16, "int", "S3 download / decode threads", "Prediction"),
     F("queue_size", "Queue size", 32, "int", "decoded-image queue depth", "Prediction"),
     F("model_batch_size", "Model batch size", 1, "int", "images per GPU forward pass (1 = legacy path)", "Prediction"),

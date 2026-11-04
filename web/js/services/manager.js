@@ -11,11 +11,11 @@ export async function mount(root, { service }) {
   let section = store.get('eu.mgr.section', 'creds');
   if (section !== 'env') section = 'creds';
   const body = h('div', { class: 'stack', style: { gap: '16px' } });
+  const seg = segmented([{ value: 'creds', label: '🔑 Logins' }, { value: 'env', label: '🧾 Env files' }], section, (v) => {
+    section = v; store.set('eu.mgr.section', v); render();
+  });
   root.append(
-    h('div', { class: 'row' },
-      segmented([{ value: 'creds', label: '🔑 Logins' }, { value: 'env', label: '🧾 Env files' }], section, (v) => {
-        section = v; store.set('eu.mgr.section', v); render();
-      }),
+    h('div', { class: 'row' }, seg,
       h('span', { style: { flex: 1 } }),
       h('button', { class: 'btn', type: 'button', onclick: async () => {
         openSettings(service, await get(`/api/services/${service.id}/settings`), () => render());
@@ -26,10 +26,23 @@ export async function mount(root, { service }) {
   const env = envSection();
   function render() {
     clear(body, section === 'creds' ? creds.el : env.el);
-    (section === 'creds' ? creds : env).refresh();
+    return (section === 'creds' ? creds : env).refresh();
   }
   render();
-  return { onShow: () => (section === 'creds' ? creds : env).refresh() };
+
+  // global search / palette refs: new-login · login:<index>:<hash> · repo:<path> · envfile:<path>
+  async function open(ref) {
+    const [kind, ...rest] = ref.split(':');
+    const target = kind === 'repo' || kind === 'envfile' ? 'env' : 'creds';
+    section = target; store.set('eu.mgr.section', target); seg.value = target;
+    await render();
+    if (kind === 'new-login') return creds.add();
+    if (kind === 'login') return creds.edit(Number(rest[0]), rest.slice(1).join(':'));
+    if (kind === 'repo') return env.showRepo(rest.join(':'));
+    if (kind === 'envfile') return env.showFile(rest.join(':'));
+    toast(`Unknown Manager link “${ref}”`, 'err');
+  }
+  return { onShow: () => (section === 'creds' ? creds : env).refresh(), open };
 }
 
 /* =================================================================== credentials file */
@@ -174,7 +187,22 @@ function credsSection() {
     });
   }
 
-  return { el, refresh };
+  function add() {
+    if (!data?.configured) return toast('Choose where the credentials file lives first', 'err');
+    if (!data.git.safe || data.problem) return toast('Saving is blocked for this file — see the notice above', 'err');
+    editEntry();
+  }
+
+  // by fingerprint, so a stale index (file edited since the search) still finds the right entry or none
+  function edit(index, hash) {
+    const entries = data?.entries || [];
+    const entry = entries.find((e) => e.index === index && e.hash === hash) || entries.find((e) => e.hash === hash);
+    if (!entry) return toast('That login changed or is gone — search again', 'err');
+    if (!data.git.safe) return toast('Saving is blocked for this file — see the notice above', 'err');
+    editEntry(entry);
+  }
+
+  return { el, refresh, add, edit };
 }
 
 /* =================================================================== env files */
@@ -196,12 +224,32 @@ function envSection() {
         h('span', { class: 'muted small' }, 'Matches .env, .env.*, *.env, *credentials*.sh … (patterns in ⚙ Settings). venv / node_modules / .git are skipped.')))),
     list);
 
+  let repos = [];
+  const viewers = new Map();  // repo path -> { card, viewer } of the cards currently shown
+
   async function refresh() {
     try {
-      const repos = await get(`${API}/env/repos`);
+      repos = await get(`${API}/env/repos`);
+      viewers.clear();
       if (!repos.length) return clear(list, h('div', { class: 'notice' }, 'No repositories yet. Add one above or scan your workspace.'));
       clear(list, repos.map(repoCard));
     } catch (e) { toastError(e); }
+  }
+
+  // expands a repo's card (re-rendering keeps it open) and scrolls to it
+  async function showRepo(path) {
+    if (!repos.some((r) => r.path === path)) { toast('That repository is no longer registered', 'err'); return null; }
+    if (!open.has(path)) { open.add(path); store.set('eu.mgr.openRepos', [...open]); await refresh(); }
+    const slot = viewers.get(path);
+    slot?.card.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    return slot;
+  }
+
+  async function showFile(path) {
+    const repo = repos.find((r) => r.files.some((f) => f.path === path));
+    if (!repo) return toast('That file is no longer part of a registered repository', 'err');
+    const slot = await showRepo(repo.path);
+    if (slot) viewFile(repo.files.find((f) => f.path === path), slot.viewer);
   }
 
   async function addRepo(path) {
@@ -247,6 +295,7 @@ function envSection() {
       store.set('eu.mgr.openRepos', [...open]);
     };
     const viewer = h('div', {});
+    viewers.set(repo.path, { card, viewer });
     const files = repo.files;
     card.append(
       h('div', { class: 'card-head', role: 'button', tabindex: 0, onclick: toggle,
@@ -315,5 +364,5 @@ function envSection() {
     draw();
   }
 
-  return { el, refresh };
+  return { el, refresh, showRepo, showFile };
 }

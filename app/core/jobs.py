@@ -24,6 +24,8 @@ from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import audit
+
 RUNNING, SUCCEEDED, FAILED, CANCELLED = "running", "succeeded", "failed", "cancelled"
 
 
@@ -113,6 +115,24 @@ class Job:
         }
 
 
+# ---- audit: names, paths and ids only (never the script or env, which may hold secrets) -------------
+_AUDIT_META = ("step", "variant", "output", "db", "path")
+
+
+def _audit_start(job: Job) -> None:
+    detail = {"job": job.id, "lock_key": job.lock_key, "cwd": job.cwd,
+              **{k: job.meta[k] for k in _AUDIT_META if k in job.meta}}
+    audit.record("job", "start", job.title, env=job.meta.get("env"),
+                 detail={k: v for k, v in detail.items() if v is not None})
+
+
+def _audit_finish(job: Job) -> None:
+    audit.record("job", "finish", job.title, env=job.meta.get("env"), status=job.status,
+                 detail={"job": job.id, "exit_code": job.exit_code,
+                         "duration": round((job.ended_at or time.time()) - job.started_at, 1),
+                         "log": str(job.log_path)})
+
+
 class JobManager:
     def __init__(self, log_dir: Path, max_lines: int = 5000, keep: int = 100):
         self.log_dir = log_dir
@@ -152,6 +172,7 @@ class JobManager:
             )
             self._jobs[job_id] = job
             self._prune()
+        _audit_start(job)
 
         full_env = {**os.environ, "PYTHONUNBUFFERED": "1", **(env or {})}
         try:
@@ -167,6 +188,7 @@ class JobManager:
         except OSError as e:
             job._feed(f"failed to start: {e}\n")
             job.status, job.exit_code, job.ended_at = FAILED, -1, time.time()
+            _audit_finish(job)
             return job
         job._proc = proc
         threading.Thread(target=self._pump, args=(job, proc), daemon=True, name=f"job-{job_id}").start()
@@ -214,6 +236,7 @@ class JobManager:
                 job.status = CANCELLED
             else:
                 job.status = SUCCEEDED if code == 0 and error is None else FAILED
+            _audit_finish(job)
 
     @staticmethod
     def _kill_group(pgid: int, sig: int) -> bool:

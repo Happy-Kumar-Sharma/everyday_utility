@@ -2,6 +2,7 @@ from app.core.registry import Service
 from app.core.registry import SettingField as F
 
 from .router import SERVICE_ID, router
+from .search import search
 
 SERVICE = Service(
     id=SERVICE_ID,
@@ -10,6 +11,7 @@ SERVICE = Service(
     icon="🔐",
     order=30,
     router=router,
+    search=search,
     settings=(
         F("credentials_file", "Credentials file", "", "path",
           "plain-text file for logins; keep it outside git repos or git-ignored", "Credentials"),

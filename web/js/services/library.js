@@ -442,6 +442,19 @@ export async function mount(root, { service }) {
     if (e.key === 'n' && writable()) { e.preventDefault(); editItem(null); }
   });
 
+  // global search / palette: 'new' = new-item editor, anything else = an item path → its viewer
+  async function open(ref) {
+    await load();
+    if (!data) return;
+    if (ref === 'new') {
+      if (!writable()) return toast('Saving is blocked for this library folder — see the notice above', 'err');
+      return editItem(null);
+    }
+    const item = data.items.find((i) => i.path === ref);
+    if (!item) return toast(`“${ref}” is no longer in the library`, 'err');
+    view(item);
+  }
+
   await load();
-  return { onShow: load };
+  return { onShow: load, open };
 }

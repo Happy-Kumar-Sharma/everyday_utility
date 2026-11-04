@@ -12,6 +12,12 @@ python-multipart), plus `psql` on PATH for the SQL steps. It binds to 127.0.0.1 
 
 ## Tabs
 
+### 🏠 Home
+The start page: today's tasks, focus timer, next reminder, jobs, backup age, favourite library items, recent
+activity — plus **🖥 screen time today** (from GNOME idle time; minute counts only), **💧 water** tracking with
+reminders, and a **🗣 standup** reminder with a summary built from the Planner. Press **Ctrl+K** anywhere to search
+tasks, notes, library items, logins (never passwords), env files (names only), dev tools and activity.
+
 ### ✅ Planner
 Daily tasks, reminders and notes.
 - **Quick add**: `Renew SSL cert #ops !high @tomorrow ^monthly` sets tags (`#`), priority (`!high` / `!low`),
@@ -89,6 +95,22 @@ button) and a **Run** button that starts a background job with live logs.
   file with every file of one repo or of all repos. Only the list of repos is stored; file contents are
   always read live from disk.
 
+### ✅ Planner extras
+Per-task time tracking with a 🍅 Pomodoro focus bar, a 📊 weekly review (done per day, time per tag, slipped
+tasks, copy as text), and “➕ Create task” on failed jobs.
+
+### 🛠 Dev Tools
+JSON (format / validate / diff), text diff, Base64, JWT decode, epoch ↔ date, UUID, URL parse, regex tester,
+SHA hashes and text utilities — all in the browser.
+
+### 🧾 Activity
+Audit log of what ran and changed (jobs, pipeline steps, library runs, logins/env-file actions, backups, settings,
+remote logins) — names and counts only, never secrets. Filter, search, export.
+
+### ⚡ Start on login / 📱 phone access
+`bash scripts/install_service.sh` installs a systemd user service. Optional remote access over Tailscale behind a
+password: see `scripts/tailscale_remote.md` (off unless `EU_REMOTE_HOSTS` and a password are set).
+
 ### 📖 Guide
 In-app instructions: running the app, every tab, where data lives, **💾 Create backup now** (zip of planner,
 settings, repo list, logins file and optionally an env export, into a folder outside the app, with a RESTORE.txt),
@@ -147,6 +169,9 @@ tests/                       pytest
    Its routes are served under `/api/my-tool/…`. Read the tab's settings with
    `app.core.context.service_settings("my-tool")` (defaults + saved values). For long-running commands use
    `app.core.context.jobs.start(...)` and return `job.to_dict()`; the frontend `jobConsole(job)` streams it.
+   Optional hooks: `search=` (Ctrl+K provider returning `{title, subtitle, icon, ref}`; the JS module's
+   `mount()` may return `open(ref)` to jump to a result), `startup=` / `shutdown=` (server lifecycle).
+   Ship CSS in your own `web/css/<tab>.css` and load it with `loadCss()`.
    Set `background=True` and export `background(ctx)` from the JS module to run something from page load (the
    Planner's reminders work this way). If the package raises on import, the other tabs still load and the sidebar
    shows it as "(failed)" with the traceback on hover.
@@ -161,3 +186,5 @@ tests/                       pytest
 ```bash
 python3 -m pytest -q
 ```
+
+`tests/conftest.py` points every test run at a throwaway data folder, so tests never touch your real `data/`.

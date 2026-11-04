@@ -291,3 +291,19 @@ def test_backup_refuses_git_repo(tmp_path, monkeypatch):
     with TestClient(app) as c:
         r = c.post("/api/guide/backup", json={"dest_dir": str(other), "parts": []}, headers={"x-everyday-utility": "1"})
         assert r.status_code == 400 and "git repo" in r.json()["detail"]
+
+
+def test_unreadable_env_file_does_not_break_listing(tmp_path):
+    import os
+
+    repo = tmp_path / "r"
+    repo.mkdir()
+    (repo / ".env").write_text("A=1\n")
+    bad = repo / "dev.env"
+    bad.write_text("B=2\n")
+    os.chmod(bad, 0)
+    try:
+        files = envfiles.repo_files({"path": str(repo)}, PATTERNS, 4)
+        assert {f["rel"]: f["var_count"] for f in files}[".env"] == 1
+    finally:
+        os.chmod(bad, 0o600)

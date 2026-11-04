@@ -1,0 +1,16 @@
+# systemd --user unit for Everyday Utility; scripts/install_service.sh fills in the repo path.
+[Unit]
+Description=Everyday Utility (local web app on 127.0.0.1:8765)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=@REPO@
+ExecStart=@REPO@/run.sh
+# EU_REMOTE_HOSTS, EU_PORT, ... (the leading "-" makes the file optional)
+EnvironmentFile=-%h/.config/everyday-utility.env
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

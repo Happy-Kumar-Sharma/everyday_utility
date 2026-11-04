@@ -158,11 +158,11 @@ def repo_files(repo: dict, patterns: list[str], max_depth: int) -> list[dict]:
             rel = str(p)
         info = {"path": str(p), "rel": rel, "exists": exists, "manual": p in extra}
         if exists:
-            st = p.stat()
-            info.update(size=st.st_size, mtime=st.st_mtime)
             try:
+                st = p.stat()
+                info.update(size=st.st_size, mtime=st.st_mtime)
                 info["var_count"] = len(parse_vars(read_text(p)))
-            except EnvError:
+            except (EnvError, OSError):  # one unreadable file must not hide the repo's other files
                 info["var_count"] = None
         out.append(info)
     return out

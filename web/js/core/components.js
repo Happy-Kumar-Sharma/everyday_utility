@@ -209,8 +209,9 @@ export function jobConsole(job, { onDone } = {}) {
   const pill = h('span', {});
   const elapsed = h('span', { class: 'muted small' });
   const cancelBtn = h('button', { class: 'btn sm danger', type: 'button', onclick: cancel }, 'Cancel');
+  const taskBtn = h('button', { class: 'btn sm', type: 'button', hidden: true, title: 'Add a high-priority Planner task due today', onclick: createTask }, '➕ Create task');
   const el = h('div', { class: 'job' },
-    h('div', { class: 'job-head' }, pill, h('span', { class: 'title' }, job.title), elapsed, h('span', { class: 'spacer' }),
+    h('div', { class: 'job-head' }, pill, h('span', { class: 'title' }, job.title), elapsed, h('span', { class: 'spacer' }), taskBtn,
       h('button', { class: 'btn sm', type: 'button', onclick: () => copyText(lines.concat(partial ? [partial] : []).join('\n'), 'Log copied') }, 'Copy log'),
       h('a', { class: 'btn sm', href: `/api/jobs/${job.id}/log` }, 'Full log'),
       cancelBtn),
@@ -221,6 +222,20 @@ export function jobConsole(job, { onDone } = {}) {
     clear(pill, statusPill(j.status));
     elapsed.textContent = fmt.duration(j.duration) + (j.exit_code != null && j.status !== 'succeeded' ? ` · exit ${j.exit_code}` : '');
     cancelBtn.hidden = j.status !== 'running';
+    taskBtn.hidden = j.status !== 'failed';  // includes "lost" (server restarted)
+  }
+
+  async function createTask() {
+    const d = new Date();
+    const due = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const notes = [job.display || job.title, `exit code ${job.exit_code ?? 'unknown (job lost)'}`, `log: /api/jobs/${job.id}/log (data/jobs/${job.id}.log)`].join('\n');
+    try {
+      const t = await post('/api/planner/tasks', { title: `Fix: ${job.title} failed`, notes, tags: ['job'], priority: 'high', due });
+      taskBtn.disabled = true;
+      taskBtn.textContent = '✓ Task created';
+      toast(`Task created: “${t.title}”`, 'ok');
+      window.dispatchEvent(new CustomEvent('planner:changed', { detail: { source: 'job' } }));
+    } catch (e) { toastError(e); }
   }
 
   function render() {

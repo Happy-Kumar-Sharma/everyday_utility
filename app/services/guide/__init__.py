@@ -10,7 +10,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.core import config, context
+from app.core import audit, config, context
 from app.core.registry import Service
 
 router = APIRouter()
@@ -79,6 +79,20 @@ class BackupRequest(BaseModel):
 
 @router.post("/backup")
 def backup(req: BackupRequest):
+    """Every attempt is audited: the Home dashboard reads the last backup from audit.recent(1, kind="backup")."""
+    flags = req.model_dump(include={"parts", "include_credentials", "include_library", "include_env_files"})
+    try:
+        result = _backup(req)
+    except Exception as e:
+        reason = str(e.detail) if isinstance(e, HTTPException) else f"{type(e).__name__}: {e}"
+        audit.record("backup", "create", req.dest_dir, status="failed", detail={"reason": reason, **flags})
+        raise
+    audit.record("backup", "create", result["path"], status="succeeded",
+                 detail={"size": result["size"], "contents": result["contents"], **flags})
+    return result
+
+
+def _backup(req: BackupRequest) -> dict:
     dest = Path(req.dest_dir).expanduser().resolve()
     root = config.ROOT_DIR.resolve()
     if dest == root or root in dest.parents:

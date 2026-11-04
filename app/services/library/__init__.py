@@ -3,6 +3,7 @@ from app.core.registry import Service
 from app.core.registry import SettingField as F
 
 from .router import SERVICE_ID, router
+from .search import search
 
 SERVICE = Service(
     id=SERVICE_ID,
@@ -11,6 +12,7 @@ SERVICE = Service(
     icon="📚",
     order=8,
     router=router,
+    search=search,
     settings=(
         F("library_dir", "Library folder", str(config.ROOT_DIR / "private" / "library"), "path",
           "collections are sub-folders, items are files; must be outside git or git-ignored", "Library"),
