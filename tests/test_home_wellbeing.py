@@ -117,6 +117,32 @@ def test_streak_gap_rules(env):
 
 
 # ---- water ---------------------------------------------------------------------------------------
+def _session_starts(break_s: int, phase: int) -> set:
+    """Sample every 30 s: 55 min of input, then `break_s` without input, then input again. Collect the session starts."""
+    t0 = at(MON, 9, 0, phase)
+    last_input, starts, t = t0, set(), t0
+    while t < t0 + 55 * 60 + break_s + 10 * 60:
+        away = t0 + 55 * 60 <= t < t0 + 55 * 60 + break_s
+        if not away:
+            last_input = t
+        wb.sample(lambda: (int((t - last_input) * 1000), False), now=t, values=values())
+        st = wb.screen_payload(t, values())["current_streak_start"]
+        if st:
+            starts.add(st)
+        t += 30
+    return starts
+
+
+@pytest.mark.parametrize("phase", [0, 15, 29])
+def test_break_long_enough_starts_a_new_session(env, phase):
+    # documented in the screen_break_minutes help: away for idle time + ~2 min ends the session
+    assert len(_session_starts(5 * 60, phase)) == 2
+
+
+def test_short_break_keeps_the_session(env):
+    assert len(_session_starts(2 * 60, 0)) == 1
+
+
 def test_water_plus_minus_floors_at_zero_and_history(env):
     r = env.post("/api/home/water", json={"delta": -1}, headers=H)
     assert r.status_code == 200 and r.json()["water"]["count"] == 0
@@ -223,12 +249,14 @@ def test_standup_summary_from_planner(env):
     v = values()
     s = wb.standup_summary(at(MON, 10), v)
     assert s["previous_day"] == FRI.isoformat()
-    assert [i["title"] for i in s["yesterday"]] == ["Ship release", "Weekend fix"]
+    # only what was finished on the previous working day (Friday), not Saturday's work
+    assert [i["title"] for i in s["yesterday"]] == ["Ship release"]
     assert [i["title"] for i in s["today"]] == ["Write docs", "Review PR", "Late a bit", "Very late"]
     assert [i["note"] for i in s["today"]] == ["in progress", "due today", "overdue 1 d", "overdue 3 d"]
     assert [i["title"] for i in s["blockers"]] == ["Pushed around", "Very late", "Job failed: Batched predictions"]
     text = s["text"]
-    assert text.startswith("**Yesterday (Fri 30 Oct)**\n- [high] Ship release\n- Weekend fix")
+    assert text.startswith("**Yesterday (Fri 30 Oct)**\n- [high] Ship release\n\n")
+    assert "Weekend fix" not in text
     assert "**Today**\n- Write docs\n- [high] Review PR\n- Late a bit\n- [low] Very late" in text
     assert "- Job failed: Batched predictions" in text and "Fine job" not in text and "Old thing" not in text
 

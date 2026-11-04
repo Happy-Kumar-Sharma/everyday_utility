@@ -1,7 +1,7 @@
 import importlib
 import json
 import time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -22,7 +22,8 @@ class Clock:
 
 @pytest.fixture()
 def clock(monkeypatch):
-    c = Clock(time.time())
+    # noon today: tests advance the clock by hours and must not cross midnight (real date.today() is used too)
+    c = Clock(datetime.combine(date.today(), datetime.min.time()).timestamp() + 12 * 3600)
     monkeypatch.setattr(store_mod.time, "time", c)
     return c
 

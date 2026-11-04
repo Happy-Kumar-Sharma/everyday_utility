@@ -50,7 +50,9 @@ SETTINGS = (
                  "A minute counts as screen time when there was input within this many seconds and the screen "
                  "isn't locked (30–3600).", "Screen time"),
     SettingField("screen_break_minutes", "Break nudge after (minutes)", 50, "int",
-                 "Suggest a short break after this long at the screen without one. 0 = no break nudges.", "Screen time"),
+                 "Suggest a short break after this long at the screen without one. A break ends the session once you've "
+                 "been away about idle time + 2 minutes (≈ 4–5 min with the defaults); after 'Taking one' a shorter "
+                 "break nudges again one interval later. 0 = no break nudges.", "Screen time"),
     SettingField("water_goal", "Daily goal (glasses)", 8, "int", "1–40 glasses.", "Water"),
     SettingField("glass_ml", "Glass size (ml)", 250, "int", "50–2000 ml.", "Water"),
     SettingField("water_remind_minutes", "Remind every (minutes)", 60, "int",
@@ -528,9 +530,9 @@ def standup_summary(now: float, values: dict) -> dict:
     today = _local(now).date()
     t_iso = today.isoformat()
     prev = previous_working_day(today, values["standup_days_list"])
-    since, until = _midnight(prev), _midnight(today)
+    since, until = _midnight(prev), _midnight(prev + timedelta(days=1))
 
-    # everything finished since the start of the previous working day, so Monday also picks up weekend work
+    # tasks finished on the previous working day itself (Monday -> Friday; weekend work is not included)
     done = sorted((t for t in tasks if t.get("status") == "done" and since <= (t.get("done_at") or 0) < until),
                   key=lambda t: t.get("done_at") or 0)
     open_ = [t for t in tasks if t.get("status") != "done"]

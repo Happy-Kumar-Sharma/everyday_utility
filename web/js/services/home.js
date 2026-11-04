@@ -71,13 +71,13 @@ const label = (text, cls = '') => h('div', { class: `home-label ${cls}` }, text)
 const WB_URL = '/api/home/wellbeing';
 const WB_POLL_MS = 60_000;
 const HEARTBEAT_MS = 60_000;
-const BREAK_KEY = 'eu.home.break';          // {start, until}: until 0 = "taking one" (quiet until the session resets)
+const BREAK_KEY = 'eu.home.break';          // {start, until}: no nudge for this session until `until` (epoch ms)
 const WATER_SNOOZE_KEY = 'eu.home.waterSnooze';  // epoch ms
 const ALERT_STYLE = { background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--accent)' };
 
 const wb = { data: null, error: null, started: false, pending: null, lastInput: Date.now(), soon: null };
 const wbListeners = new Set();
-const showing = { break: null, water: null, standup: null };
+const showing = { break: null, breakStart: null, water: null, standup: null };
 
 const pad2 = (n) => String(n).padStart(2, '0');
 const hm = (m) => (m >= 60 ? `${Math.floor(m / 60)}h ${pad2(m % 60)}m` : `${m}m`);
@@ -178,14 +178,19 @@ function reminders(d) {
 function breakReminder(s) {
   if (!s || s.error) return;
   const start = s.current_streak_start;
-  if (!start) { closeAlert('break'); return; }  // the session ended: that was the break
-  if (!s.break_minutes || s.current_streak_minutes < s.break_minutes || showing.break) return;
+  // the session ended or a new one began since the toast went up: that was the break, so drop the stale toast
+  if (showing.break && (!start || start !== showing.breakStart)) closeAlert('break');
+  if (!start || !s.break_minutes || s.current_streak_minutes < s.break_minutes || showing.break) return;
   const st = store.get(BREAK_KEY, null);
-  if (st && st.start === start && (st.until === 0 || Date.now() < st.until)) return;
+  if (st && st.start === start && Date.now() < st.until) return;
+  // "Taking one" stays quiet for another break_minutes: if the session hasn't reset by then (the break was too
+  // short to end it), nudge again rather than staying silent for the rest of a long session
+  const quietMs = s.break_minutes * 60_000;
   alertToast('break', `Time for a short break — you've been at the screen for ${s.current_streak_minutes} min`, null, [
-    { label: 'Taking one', run: () => store.set(BREAK_KEY, { start, until: 0 }) },
+    { label: 'Taking one', run: () => store.set(BREAK_KEY, { start, until: Date.now() + quietMs }) },
     { label: 'Snooze 10 min', run: () => store.set(BREAK_KEY, { start, until: Date.now() + 10 * 60_000 }) },
   ]);
+  showing.breakStart = start;
 }
 
 function waterReminder(w) {

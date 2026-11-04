@@ -79,6 +79,8 @@ a.home-title:hover { color: var(--accent); text-decoration: underline; }
 
 .home-wb [aria-busy="true"], .home-wb [aria-disabled="true"] { opacity: .55; }
 .home-wb [aria-busy="true"] { cursor: progress; }
+/* merely unavailable (e.g. "−" at 0 glasses), not in flight: no busy cursor */
+.home-wb [aria-disabled="true"]:not([aria-busy="true"]) { cursor: not-allowed; }
 
 @media (max-width: 560px) {
   .home-big { font-size: 26px; }
