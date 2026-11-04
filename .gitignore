@@ -1,0 +1,25 @@
+# ---- private data: nothing below may ever be pushed -------------------------------------------
+# app state: settings (paths), planner, uploads, job logs, query outputs, repo list
+data/
+# default home for the credentials text file (and its .bak)
+private/
+# env / credential files, wherever they appear
+.env
+.env.*
+*.env
+*credentials*
+*secret*
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+# text dumps produced by the Export buttons, if saved into the repo by accident
+*_export*.txt
+
+# ---- tooling ----------------------------------------------------------------------------------
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/

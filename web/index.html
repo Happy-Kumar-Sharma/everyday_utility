@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Everyday Utility</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧰</text></svg>">
+  <link rel="stylesheet" href="/static/css/app.css">
+  <script>
+    // apply the saved theme before first paint to avoid a flash
+    try { const t = JSON.parse(localStorage.getItem('eu.theme')); if (t) document.documentElement.dataset.theme = t; } catch {}
+  </script>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-icon">🧰</span><span>Everyday Utility</span></div>
+      <nav id="nav" class="nav" aria-label="Services"></nav>
+      <div class="sidebar-footer">
+        <button id="jobs-btn" class="nav-item" type="button">
+          <span class="nav-icon">⚙️</span><span>Jobs</span><span id="jobs-badge" class="badge" hidden></span>
+        </button>
+        <button id="theme-btn" class="nav-item" type="button" title="Toggle light / dark">
+          <span class="nav-icon">🌓</span><span>Theme</span>
+        </button>
+      </div>
+    </aside>
+    <main class="main">
+      <header class="page-header">
+        <h1 id="page-title">Loading…</h1>
+        <p id="page-desc" class="muted"></p>
+      </header>
+      <section id="view" class="view"></section>
+    </main>
+  </div>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+  <script type="module" src="/static/js/app.js"></script>
+</body>
+</html>
