@@ -1,6 +1,6 @@
 /* 🛠 Dev Tools tab */
 .dt-layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; align-items: start; }
-.dt-nav { display: flex; flex-direction: column; gap: 2px; padding: 8px; position: sticky; top: 16px; }
+.dt-nav { display: flex; flex-direction: column; gap: 2px; padding: 8px; position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; }
 .dt-nav .nav-item { border: 0; background: none; font: inherit; text-align: left; cursor: pointer; width: 100%; }
 .dt-main { min-width: 0; }
 .dt-tool { gap: 12px; }
@@ -47,3 +47,8 @@
   .dt-diff .dt-ln { width: 32px; padding: 1px 4px; }
 }
 @media (max-width: 520px) { .dt-private { display: none; } }
+
+/* ---------- grouped navigation (32 tools) ---------- */
+.dt-filter { width: 100%; padding: 6px 9px; margin-bottom: 6px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; }
+.dt-group { display: flex; flex-direction: column; gap: 1px; margin-bottom: 6px; }
+.dt-group-title { padding: 6px 10px 2px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; font-size: 11px; }

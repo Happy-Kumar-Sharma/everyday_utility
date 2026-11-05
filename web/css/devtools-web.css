@@ -1,0 +1,63 @@
+/* Dev Tools — "web & ops" group: HTTP reference (.dt-http), curl converter (.dt-curl), Docker / kubectl builder (.dt-docker). */
+
+/* ---------- HTTP reference ---------- */
+.dt-http input[type=search] {
+  flex: 1; min-width: 0; padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface); color: var(--text); font: inherit;
+}
+.dt-http input[type=search]:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.dt-http-search { flex-wrap: nowrap; }
+.dt-http-list { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+  max-height: 560px; overflow-y: auto; }
+.dt-http-item { border-bottom: 1px solid var(--border); background: var(--surface); }
+.dt-http-item:last-child { border-bottom: 0; }
+.dt-http-item > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 8px 12px; cursor: pointer; list-style: none; min-width: 0; }
+.dt-http-item > summary::-webkit-details-marker { display: none; }
+.dt-http-item > summary::before { content: "▸"; color: var(--muted); flex: none; transition: transform .15s; }
+.dt-http-item[open] > summary::before { transform: rotate(90deg); }
+.dt-http-item > summary:hover { background: var(--surface-2); }
+.dt-http-item > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.dt-http-code { flex: none; min-width: 3.6em; justify-content: center; }
+.dt-http-name { font-weight: 600; flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.dt-http-short { flex: 1 1 140px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dt-http-item[open] .dt-http-short { visibility: hidden; }
+.dt-http-body { padding: 4px 14px 12px 32px; gap: 8px; font-size: 13.5px; }
+.dt-http-body p { margin: 0; }
+.dt-http-example code { background: var(--code-bg); color: var(--code-text); padding: 4px 8px; border-radius: 6px; word-break: break-all; }
+.dt-http-h { margin: 8px 0 0; font-size: 15px; }
+.dt-http-warnings, .dt-curl-warnings, .dt-docker-warnings { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.dt-http-warnings li, .dt-curl-warnings li { display: flex; gap: 6px; align-items: baseline; }
+.dt-http-warnings .pill, .dt-curl-warnings .pill { flex: none; }
+.dt-http-table td { vertical-align: top; white-space: normal; }
+.dt-http-val { word-break: break-all; max-width: 320px; }
+.dt-http-note { color: var(--accent); margin-top: 2px; }
+
+/* ---------- curl converter ---------- */
+.dt-curl-summary { min-width: 0; }
+.dt-curl-url { min-width: 0; word-break: break-all; flex: 1 1 220px; }
+.dt-curl .code { max-height: 460px; }
+
+/* ---------- Docker / kubectl ---------- */
+.dt-docker .spacer { flex: 1; }
+.dt-docker-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px 12px; }
+.dt-docker-grid > [hidden] { display: none; }
+.dt-docker-lines { min-height: 64px; font-size: 12.5px; }
+.dt-docker-flags { gap: 6px 16px; }
+.dt-docker-cmd { max-height: 340px; margin: 0; }
+.dt-docker-cmd:empty { display: none; }
+.dt-docker-actions { gap: 8px; }
+.dt-docker-libname { flex: 1; min-width: 160px; max-width: 360px; }
+.dt-docker-actions .btn[disabled] { opacity: .5; cursor: not-allowed; }
+.dt-docker-danger { padding: 8px 12px; border-radius: 8px; background: var(--err-soft); color: var(--err);
+  border: 1px solid color-mix(in srgb, var(--err) 35%, transparent); font-size: 13px; }
+.dt-docker-warnings li { color: var(--warn); }
+.dt-docker-warnings li::before { content: "⚠ "; }
+.dt-docker .row > label.check { white-space: nowrap; }
+
+@media (max-width: 640px) {
+  .dt-http-short { display: none; }
+  .dt-http-body { padding-left: 14px; }
+  .dt-http-search { flex-wrap: wrap; }
+  .dt-docker-libname { max-width: none; }
+  .dt-http-val { max-width: 160px; }
+}

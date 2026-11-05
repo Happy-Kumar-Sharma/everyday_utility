@@ -100,8 +100,12 @@ Per-task time tracking with a 🍅 Pomodoro focus bar, a 📊 weekly review (don
 tasks, copy as text), and “➕ Create task” on failed jobs.
 
 ### 🛠 Dev Tools
-JSON (format / validate / diff), text diff, Base64, JWT decode, epoch ↔ date, UUID, URL parse, regex tester,
-SHA hashes and text utilities — all in the browser.
+32 tools in six groups, almost all running in the browser: **pipeline & data** (box / polygon viewer with IoU,
+JSONL inspector, SQL formatter + IN-list builder, CSV ⇄ JSON / INSERT / COPY, S3 paths, cron, .env converter),
+**formats** (JSON, diff, YAML ⇄ JSON, Markdown, text), **encode & secrets** (Base64, JWT, hashes, passwords,
+Unicode inspector), **time & numbers** (epoch, durations, bases / units, chmod), **generate** (UUID, fake data,
+QR, color) and **web & ops** (URL, regex, HTTP reference, curl converter, API tester, docker / kubectl builder,
+image tool). Each new tool is its own module in `web/js/services/devtools/tools/` (registered in `index.js`).
 
 ### 🧾 Activity
 Audit log of what ran and changed (jobs, pipeline steps, library runs, logins/env-file actions, backups, settings,

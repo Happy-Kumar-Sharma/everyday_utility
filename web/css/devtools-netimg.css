@@ -1,0 +1,81 @@
+/* 🛠 Dev Tools — web & ops: 📡 API tester (.dt-api) and 🖼️ Image tool (.dt-img). Loaded by their modules. */
+
+/* ---------- API tester ---------- */
+.dt-api-line { flex-wrap: nowrap; gap: 8px; }
+.dt-api-method { width: auto; flex: 0 0 auto; font-family: var(--mono); font-weight: 600; }
+.dt-api-url { flex: 1 1 auto; min-width: 0; }
+.dt-api-line .btn.primary { flex: 0 0 auto; }
+.dt-api > [hidden], .dt-api [hidden] { display: none !important; }
+
+.dt-api-table { width: 100%; }
+.dt-api-table td { padding: 3px 6px; vertical-align: middle; }
+.dt-api-table input[type=text] { width: 100%; min-width: 90px; }
+.dt-api-table .dt-api-on, .dt-api-table td:first-child { width: 34px; text-align: center; }
+.dt-api-table .dt-api-x, .dt-api-table td:last-child { width: 40px; text-align: center; }
+.dt-api-off input[type=text] { opacity: .5; text-decoration: line-through; }
+.dt-api-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.dt-api-vars { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.dt-api-var code { font-family: var(--mono); font-size: 12.5px; }
+.dt-api-unused { opacity: .7; }
+.dt-api-num { width: 80px; }
+
+.dt-api-res { border: 1px solid var(--border); border-radius: 10px; padding: 12px; background: var(--surface); gap: 10px; }
+.dt-api-reshead { gap: 10px; align-items: center; }
+.dt-api-status { font-family: var(--mono); font-weight: 600; }
+.dt-api-redirects ol { margin: 4px 0 0; padding-left: 20px; word-break: break-all; }
+.dt-api-hdrs td { word-break: break-all; }
+.dt-api-hdrs td:first-child { white-space: nowrap; width: 1%; }
+
+.dt-api-tree { background: var(--code-bg); color: var(--code-text); border-radius: 8px; padding: 10px 12px; font-size: 12.5px;
+  max-height: 520px; overflow: auto; line-height: 1.5; }
+.dt-api-tree details > summary { cursor: pointer; list-style: revert; }
+.dt-api-tree details > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 3px; }
+.dt-api-kids { padding-left: 18px; border-left: 1px dashed color-mix(in srgb, var(--code-text) 25%, transparent); margin-left: 4px; }
+.dt-api-leaf { padding-left: 14px; word-break: break-all; }
+.dt-api-key { opacity: .8; }
+.dt-api-v-string { color: color-mix(in srgb, var(--ok) 75%, var(--code-text)); }
+.dt-api-v-number { color: color-mix(in srgb, var(--accent) 75%, var(--code-text)); }
+.dt-api-v-boolean, .dt-api-v-null { color: color-mix(in srgb, var(--warn) 75%, var(--code-text)); }
+
+.dt-api-img { background: repeating-conic-gradient(var(--surface-2) 0 25%, var(--surface) 0 50%) 0 0 / 16px 16px;
+  border: 1px solid var(--border); border-radius: 8px; padding: 8px; text-align: center; }
+.dt-api-img img { max-width: 100%; max-height: 480px; }
+
+.dt-api-histwrap > summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
+.dt-api-history { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.dt-api-hist { display: flex; gap: 8px; align-items: center; width: 100%; text-align: left; justify-content: flex-start; }
+.dt-api-hist-url { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dt-api-lib { max-height: 60vh; overflow-y: auto; }
+.dt-api-libitem { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; width: 100%; }
+.dt-api-libitem .mono { word-break: break-all; }
+
+/* ---------- Image tool ---------- */
+.dt-img [hidden] { display: none !important; }
+.dt-img-h { margin: 4px 0 0; font-size: 14px; }
+.dt-img-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; align-items: start; }
+.dt-img-stage { position: relative; display: inline-block; align-self: flex-start; width: fit-content; max-width: 100%; line-height: 0; cursor: crosshair; touch-action: none;
+  user-select: none; border: 1px solid var(--border); border-radius: 6px; overflow: hidden;
+  background: repeating-conic-gradient(var(--surface-2) 0 25%, var(--surface) 0 50%) 0 0 / 16px 16px; }
+.dt-img-canvas { display: block; max-width: 100%; max-height: 520px; height: auto; width: auto; }
+.dt-img-crop { position: absolute; border: 2px dashed var(--accent); box-shadow: 0 0 0 9999px rgb(0 0 0 / .45); pointer-events: none; }
+.dt-img-pixel { gap: 8px; min-height: 28px; }
+.dt-img-swatch { width: 22px; height: 22px; border-radius: 4px; border: 1px solid var(--border); flex: 0 0 auto;
+  background: repeating-conic-gradient(var(--surface-2) 0 25%, var(--surface) 0 50%) 0 0 / 8px 8px; }
+.dt-img-resultwrap { align-self: flex-start; width: fit-content; max-width: 100%; box-sizing: border-box; border: 1px solid var(--border); border-radius: 6px; padding: 6px; line-height: 0;
+  background: repeating-conic-gradient(var(--surface-2) 0 25%, var(--surface) 0 50%) 0 0 / 16px 16px; }
+.dt-img-result { max-width: 100%; max-height: 520px; }
+.dt-img-fs { border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px 10px; margin: 0; min-width: 0; }
+.dt-img-fs legend { padding: 0 6px; font-weight: 600; font-size: 13px; }
+.dt-img-fs .field { min-width: 0; }
+.dt-img-num { width: 90px; }
+.dt-img-quality input[type=range] { width: 160px; accent-color: var(--accent); }
+.dt-img-text { white-space: pre-wrap; word-break: break-word; max-width: 60ch; }
+.dt-img .btn[aria-pressed=true] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+
+@media (max-width: 600px) {
+  .dt-api-line { flex-wrap: wrap; }
+  .dt-api-url { flex-basis: 100%; order: 3; }
+  .dt-img-num { width: 72px; }
+  .dt-img-quality input[type=range] { width: 120px; }
+}

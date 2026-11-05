@@ -69,13 +69,17 @@ export async function mount(root) {
     ]],
 
     ['devtools', '🛠 Dev Tools', () => [
-      p('Everyday converters that run entirely in your browser (nothing is sent anywhere, inputs are not saved):'),
+      p('32 developer utilities in six groups. They run in your browser and inputs are never saved (they may hold tokens). Use the filter box at the top of the list, or Ctrl K (e.g. “cron”, “iou”, “curl”).'),
       ul(
-        [b('JSON'), ' format / minify / validate (with line:column) / sort keys / structural diff — warns when big integers would lose precision.'],
-        [b('Text diff'), ' side-by-side or unified · ', b('Base64'), ' (URL-safe, files) · ', b('JWT'), ' decode with expiry badge (signature not verified).'],
-        [b('Time'), ' epoch ↔ date (s / ms / µs / ns auto-detected, timezones) · ', b('UUID'), ' v4 in bulk · ', b('URL'), ' encode / decode / parse with editable query params.'],
-        [b('Regex'), ' tester with highlighted matches, groups and replace preview (runaway patterns are stopped) · ', b('Hash'), ' SHA-1/256/384/512 for text or files · ', b('Text'), ' case conversion, counts, sort / unique / trim lines.'],
-        ['Jump to a tool with Ctrl K, e.g. “jwt” or “epoch”.'],
+        [b('Pipeline & data'), ' — ', b('Box / polygon viewer'), ' (paste bounding_box / polygon values or rows from the predictions query, draw them on an image, convert xyxy / xywh / YOLO / COCO, IoU) · ',
+          b('JSONL inspector'), ' (streams even 1 GB prediction files: keys, bad lines, extract a field, filter) · ', b('SQL format + IN list'), ' (pretty / minify, ids → IN (...) in batches) · ',
+          b('CSV ⇄ JSON / INSERT / COPY'), ' · ', b('S3 path'), ' (s3:// ⇄ URLs, console link, aws cli) · ', b('Cron helper'), ' (explain, next runs, builder) · ', b('.env converter'), ' (.env ⇄ export ⇄ JSON ⇄ docker ⇄ k8s, values masked).'],
+        [b('Formats'), ' — JSON, text diff, ', b('YAML ⇄ JSON'), ' (converted by this app’s own server, nothing leaves the machine), ', b('Markdown preview'), ', text utilities.'],
+        [b('Encode & secrets'), ' — Base64, JWT, hashes, ', b('password / passphrase generator'), ' with strength meter, ', b('Unicode inspector'), ' (hidden characters, BOM, CRLF, look-alike letters, clean-up).'],
+        [b('Time & numbers'), ' — epoch time, ', b('duration calculator'), ' (between dates, date ± “3d 4h”, gaps in a pasted log), ', b('number & unit converter'), ' (hex / bin, KB vs KiB, time units), ', b('chmod calculator'), '.'],
+        [b('Generate'), ' — UUID, ', b('fake data'), ' (schema → CSV / JSON / SQL, seedable), ', b('QR code'), ' (URL, Wi-Fi, vCard → PNG / SVG), ', b('color'), ' (formats, WCAG contrast, shades).'],
+        [b('Web & ops'), ' — URL, regex, ', b('HTTP reference'), ' (status codes, headers, “explain this response”), ', b('curl converter'), ' (curl ⇄ fetch / requests / httpx / axios), ',
+          b('API tester'), ' (requests are sent by this app’s server; {{variables}}; save requests to the Library “API requests” collection), ', b('Docker / kubectl builder'), ' (save commands to the Library), ', b('image tool'), ' (EXIF incl. GPS warning, strip metadata, resize / crop / convert).'],
       ),
     ]],
 

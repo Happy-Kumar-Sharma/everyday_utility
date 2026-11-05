@@ -1,0 +1,28 @@
+/* 🛠 Dev Tools — data group: SQL format + IN list, CSV ⇄ JSON / INSERT, S3 path */
+.dt-data .spacer { flex: 1; }
+.dt-data [hidden] { display: none !important; }
+.dt-data-field { display: flex; flex-direction: column; gap: 4px; font-weight: 500; min-width: 0; }
+.dt-data-opts { gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); }
+.dt-data-opts .seg { background: var(--surface); }
+.dt-data-opts .seg button.on { background: var(--surface-2); }
+.dt-data-opts input[type=text] { min-width: 160px; }
+.dt-data-opts label.field { min-width: 0; }
+
+.dt-data-out { max-height: 520px; overflow: auto; white-space: pre; tab-size: 4; font-size: 12.5px; line-height: 1.5; }
+.dt-data .code-wrap .dt-data-out { padding-right: 70px; }
+.dt-data .code-wrap .copy-btn.btn { background: #2a313c; border-color: #3a424e; color: #e6edf3; }
+
+.dt-data-types { gap: 6px; }
+.dt-data-types .pill { font-weight: 500; }
+.dt-data-h { margin: 6px 0 0; font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.dt-data-region { width: 170px; max-width: 100%; }
+.dt-data-bulk { max-height: 460px; }
+.dt-data-bulk td.mono { max-width: 420px; }
+
+@media (max-width: 640px) {
+  .dt-data-opts { padding: 8px; }
+  .dt-data-opts input[type=text] { min-width: 0; width: 100%; }
+  .dt-data-opts .row > label.field, .dt-data-opts .row > .dt-data-field { flex: 1 1 100%; }
+  .dt-data .code-wrap .dt-data-out { padding-right: 14px; padding-top: 40px; }
+  .dt-data-region { width: 100%; }
+}

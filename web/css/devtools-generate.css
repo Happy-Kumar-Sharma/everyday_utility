@@ -1,0 +1,64 @@
+/* 🛠 Dev Tools — Generate group: 🎲 Fake data (.dt-fake) and ▦ QR code (.dt-qr). Theme tokens only. */
+
+.dt-fake input[type=date], .dt-qr input[type=color] {
+  padding: 5px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit;
+}
+.dt-fake input[type=date] { width: 100%; min-width: 0; color-scheme: inherit; }
+
+/* ---------- fake data */
+.dt-fake-settings { align-items: flex-end; gap: 12px; }
+.dt-fake-settings label.field { flex: 0 1 auto; }
+.dt-fake-seed { width: 140px; }
+.dt-fake-format { gap: 4px; }
+.dt-fake-schema { gap: 8px; }
+.dt-fake-cols { display: flex; flex-direction: column; gap: 6px; }
+.dt-fake-col {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) 72px auto;
+  gap: 8px; align-items: end; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2);
+}
+.dt-fake-col > input, .dt-fake-col > select { min-width: 0; }
+.dt-fake-params { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.dt-fake-params:empty { display: none; }
+.dt-fake-param { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 0 1 100px; }
+.dt-fake-param.date { flex-basis: 150px; }
+.dt-fake-param.select { flex-basis: 160px; }
+.dt-fake-param.text { flex: 1 1 240px; }
+.dt-fake-param input[type=number] { max-width: none; }
+.dt-fake-null input { width: 100%; }
+.dt-fake-move { display: flex; gap: 2px; }
+.dt-fake-move .btn { padding: 4px 8px; }
+.dt-fake-move .btn:disabled { opacity: .35; cursor: default; }
+.dt-fake-saved select { width: auto; max-width: 220px; }
+.dt-fake-saved input[type=text] { width: 180px; }
+.dt-fake-table { max-height: 380px; }
+.dt-fake-out { max-height: 360px; overflow: auto; margin: 0; white-space: pre; }
+.dt-fake-out:empty { display: none; }
+.dt-fake .progress { max-width: 420px; }
+
+/* ---------- QR code */
+.dt-qr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px 12px; align-items: end; }
+.dt-qr-grid .dt-qr-full { grid-column: 1 / -1; margin: 0; }
+.dt-qr-check { padding-bottom: 8px; }
+.dt-qr-opts { align-items: flex-end; gap: 12px; }
+.dt-qr-opts label.field { flex: 0 0 auto; }
+.dt-qr-opts input[type=number] { width: 90px; }
+.dt-qr input[type=color] { width: 56px; height: 34px; padding: 2px 4px; cursor: pointer; }
+.dt-qr-info { gap: 6px; }
+.dt-qr-out { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.dt-qr-preview { padding: 12px; border: 1px solid var(--border); border-radius: var(--radius, 10px); background: var(--surface-2); max-width: 100%; }
+.dt-qr-canvas { display: block; max-width: 100%; height: auto; image-rendering: pixelated; image-rendering: crisp-edges; }
+
+@media (max-width: 860px) {
+  .dt-fake-col { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .dt-fake-move { justify-content: flex-end; }
+}
+@media (max-width: 520px) {
+  .dt-fake-col { grid-template-columns: minmax(0, 1fr) 72px; }
+  .dt-fake-col > .dt-fake-name, .dt-fake-move { grid-column: 1 / -1; }
+  .dt-fake-move { justify-content: flex-end; }
+  .dt-fake-param { flex: 1 1 100px; }
+  .dt-fake-saved select, .dt-fake-saved input[type=text], .dt-fake-seed { width: 100%; max-width: none; }
+}
+.dt-qr-pass { gap: 4px; }
+.dt-qr-label { font-weight: 500; }
+.dt-qr-pass .check { flex: 0 0 auto; }

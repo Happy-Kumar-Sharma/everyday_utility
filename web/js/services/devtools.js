@@ -4,99 +4,110 @@
 import { checkbox, codeBlock, segmented } from '../core/components.js';
 import { clear, copyText, debounce, fmt, h, loadCss, store, toast } from '../core/dom.js';
 import * as L from './devtools/logic.js';
+import { area, copyBtn, dropZone, kvList, labelled, notice, opt, setOpt, show } from './devtools/ui.js';
 
+import { GROUP_ORDER, TOOL_GROUPS } from './devtools/tools/index.js';
+
+// built-in tools (defined in this file) + tools in ./devtools/tools/ (lazy-loaded): {key, icon, name, group, build|load}
 const TOOLS = [
-  ['json', '🧾', 'JSON', jsonTool],
-  ['diff', '🔀', 'Text diff', diffTool],
-  ['base64', '🔤', 'Base64', base64Tool],
-  ['jwt', '🎫', 'JWT decoder', jwtTool],
-  ['time', '🕒', 'Time', timeTool],
-  ['uuid', '🆔', 'UUID', uuidTool],
-  ['url', '🔗', 'URL', urlTool],
-  ['regex', '🧩', 'Regex tester', regexTool],
-  ['hash', '#️⃣', 'Hash', hashTool],
-  ['text', '✂️', 'Text utilities', textTool],
-];
+  { key: 'json', icon: '🧾', name: 'JSON', group: 'Formats', build: jsonTool },
+  { key: 'diff', icon: '🔀', name: 'Text diff', group: 'Formats', build: diffTool },
+  { key: 'base64', icon: '🔤', name: 'Base64', group: 'Encode & secrets', build: base64Tool },
+  { key: 'jwt', icon: '🎫', name: 'JWT decoder', group: 'Encode & secrets', build: jwtTool },
+  { key: 'hash', icon: '#️⃣', name: 'Hash', group: 'Encode & secrets', build: hashTool },
+  { key: 'url', icon: '🔗', name: 'URL', group: 'Web & ops', build: urlTool },
+  { key: 'time', icon: '🕒', name: 'Time', group: 'Time & numbers', build: timeTool },
+  { key: 'uuid', icon: '🆔', name: 'UUID', group: 'Generate', build: uuidTool },
+  { key: 'regex', icon: '🧩', name: 'Regex tester', group: 'Web & ops', build: regexTool },
+  { key: 'text', icon: '✂️', name: 'Text utilities', group: 'Formats', build: textTool },
+  ...TOOL_GROUPS,
+].sort((a, b) => GROUP_ORDER.indexOf(a.group) - GROUP_ORDER.indexOf(b.group));
 
-const opts = store.get('devtools.opts', {});
-const opt = (tool, key, fallback) => opts[tool]?.[key] ?? fallback;
-const setOpt = (tool, key, value) => { (opts[tool] ||= {})[key] = value; store.set('devtools.opts', opts); };
+async function buildTool(tool) {
+  if (tool.build) return tool.build();
+  const mod = await tool.load();
+  return mod.default();
+}
 
 export async function mount(container) {
   loadCss('/static/css/devtools.css');
-  const built = new Map();  // key -> {el, clear}
+  const built = new Map();  // key -> {el, clear, focus?} (or a Promise while loading)
   const title = h('h2', {});
   const body = h('div', { class: 'card-body' });
   const navButtons = new Map();
   let current = null;
+  let seq = 0;
 
-  const nav = h('nav', { class: 'dt-nav card', 'aria-label': 'Dev tools' }, TOOLS.map(([key, icon, label]) => {
-    const b = h('button', { type: 'button', class: 'nav-item', onclick: () => select(key) },
-      h('span', { class: 'nav-icon', 'aria-hidden': 'true' }, icon), label);
-    navButtons.set(key, b);
-    return b;
-  }));
-  nav.addEventListener('keydown', (e) => {  // arrow keys move between tools
-    if (!['ArrowDown', 'ArrowUp', 'ArrowRight', 'ArrowLeft'].includes(e.key)) return;
-    const keys = TOOLS.map((t) => t[0]);
-    const step = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : -1;
+  const filter = h('input', { type: 'search', class: 'dt-filter', placeholder: 'Filter tools…', 'aria-label': 'Filter tools',
+    oninput: () => {
+      const q = filter.value.trim().toLowerCase();
+      for (const t of TOOLS) navButtons.get(t.key).hidden = !!q && !`${t.key} ${t.name} ${t.group}`.toLowerCase().includes(q);
+      for (const g of nav.querySelectorAll('.dt-group')) g.hidden = ![...g.querySelectorAll('.nav-item')].some((b) => !b.hidden);
+    },
+    onkeydown: (e) => {
+      if (e.key !== 'Enter') return;
+      const first = TOOLS.find((t) => !navButtons.get(t.key).hidden);
+      if (first) { select(first.key); navButtons.get(first.key).focus(); }
+    } });
+  const groups = GROUP_ORDER.map((g) => {
+    const tools = TOOLS.filter((t) => t.group === g);
+    return tools.length && h('div', { class: 'dt-group', role: 'group', 'aria-label': g },
+      h('div', { class: 'dt-group-title muted small' }, g),
+      tools.map((t) => {
+        const b = h('button', { type: 'button', class: 'nav-item', onclick: () => select(t.key) },
+          h('span', { class: 'nav-icon', 'aria-hidden': 'true' }, t.icon), t.name);
+        navButtons.set(t.key, b);
+        return b;
+      }));
+  });
+  const nav = h('nav', { class: 'dt-nav card', 'aria-label': 'Dev tools' }, filter, groups);
+  nav.addEventListener('keydown', (e) => {  // arrow keys move between visible tools
+    if (!['ArrowDown', 'ArrowUp'].includes(e.key) || e.target === filter) return;
+    const keys = TOOLS.map((t) => t.key).filter((k) => !navButtons.get(k).hidden);
+    const step = e.key === 'ArrowDown' ? 1 : -1;
     const next = keys[(keys.indexOf(current) + step + keys.length) % keys.length];
     e.preventDefault();
     select(next);
     navButtons.get(next).focus();
   });
 
-  function select(key) {
-    const tool = TOOLS.find((t) => t[0] === key) || TOOLS[0];
-    current = tool[0];
+  async function select(key) {
+    const tool = TOOLS.find((t) => t.key === key) || TOOLS[0];
+    const my = ++seq;
+    current = tool.key;
     store.set('devtools.tool', current);
     for (const [k, b] of navButtons) {
       b.classList.toggle('active', k === current);
       b.setAttribute('aria-current', k === current ? 'page' : 'false');
     }
-    if (!built.has(current)) built.set(current, tool[3]());
-    title.textContent = `${tool[1]}  ${tool[2]}`;
-    clear(body, built.get(current).el);
+    title.textContent = `${tool.icon}  ${tool.name}`;
+    if (!built.has(current)) {
+      clear(body, h('p', { class: 'muted' }, 'Loading…'));
+      built.set(current, buildTool(tool).catch((e) => {
+        built.delete(tool.key);  // allow a retry after fixing the module
+        return { el: h('div', { class: 'notice err' }, `This tool failed to load: ${e.message}`), clear() {} };
+      }));
+    }
+    const t = await built.get(current);
+    built.set(tool.key, t);
+    if (my === seq) clear(body, t.el);  // the user may have picked another tool meanwhile
+    return t;
   }
 
   const card = h('section', { class: 'card dt-main' },
     h('div', { class: 'card-head' }, title, h('span', { class: 'spacer' }),
       h('span', { class: 'muted small dt-private' }, '🔒 runs in your browser'),
-      h('button', { type: 'button', class: 'btn sm ghost', onclick: () => built.get(current)?.clear() }, 'Clear')),
+      h('button', { type: 'button', class: 'btn sm ghost', onclick: async () => (await built.get(current))?.clear() }, 'Clear')),
     body);
   container.append(h('div', { class: 'dt-layout' }, nav, card));
   select(store.get('devtools.tool', 'json'));
 
   return {
-    open(ref) { select(ref); body.querySelector('textarea, input[type=text]')?.focus(); },
+    async open(ref) {
+      const t = await select(ref);
+      if (t?.focus) t.focus(); else body.querySelector('textarea, input[type=text], input[type=search]')?.focus();
+    },
   };
-}
-
-/* ------------------------------------------------------------------ shared bits */
-const area = (props = {}) => h('textarea', { class: 'dt-input mono', rows: 8, spellcheck: false, ...props });
-const labelled = (label, el, extra) => h('label', { class: 'field' }, h('span', { class: 'row' }, label, extra), el);
-const notice = () => h('div', { class: 'notice', hidden: true, role: 'status' });
-const show = (el, kind, ...text) => { el.hidden = !text.length; el.className = `notice ${kind}`; clear(el, ...text); };
-const copyBtn = (getText, label = 'Copy') => h('button', { type: 'button', class: 'btn sm', onclick: () => copyText(getText()) }, label);
-
-/** Click-or-drop file target; onFile(file) gets a File. */
-function dropZone(label, onFile) {
-  const input = h('input', { type: 'file', hidden: true, onchange: () => input.files[0] && onFile(input.files[0]) });
-  const zone = h('button', { type: 'button', class: 'dropzone dt-drop', onclick: () => input.click() }, label, input);
-  zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('drag'); });
-  zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
-  zone.addEventListener('drop', (e) => {
-    e.preventDefault(); zone.classList.remove('drag');
-    if (e.dataTransfer.files[0]) onFile(e.dataTransfer.files[0]);
-  });
-  return zone;
-}
-
-/** Key/value list with a copy button per row. rows: [[label, value]] */
-function kvList(rows) {
-  return h('div', { class: 'dt-kv' }, rows.map(([k, v]) => h('div', { class: 'dt-kv-row' },
-    h('span', { class: 'muted' }, k), h('span', { class: 'mono dt-kv-val' }, v),
-    v ? h('button', { type: 'button', class: 'btn sm ghost', 'aria-label': `Copy ${k}`, onclick: () => copyText(v) }, '⧉') : h('span'))));
 }
 
 /* ------------------------------------------------------------------ 1. JSON */

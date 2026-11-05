@@ -34,7 +34,7 @@ def test_search_by_keyword(query, ref):
 
 def test_search_result_shape_and_no_match():
     results = search("diff")
-    assert {r["ref"] for r in results} == {"json", "diff"}
+    assert {"json", "diff"} <= {r["ref"] for r in results}
     assert all(set(r) == {"title", "subtitle", "icon", "ref"} and r["ref"] in TOOLS for r in results)
     assert search("nothing-like-this") == []
 
@@ -42,9 +42,12 @@ def test_search_result_shape_and_no_match():
 def test_tool_keys_match_frontend():
     from app.core import config
 
-    js = (config.WEB_DIR / "js" / "services" / "devtools.js").read_text()
-    for key in TOOLS:
-        assert f"['{key}'," in js
+    web = config.WEB_DIR / "js" / "services"
+    js = (web / "devtools.js").read_text() + (web / "devtools" / "tools" / "index.js").read_text()
+    for key in TOOLS:  # every searchable tool exists in the frontend, and vice versa
+        assert f"key: '{key}'" in js
+    import re
+    assert set(re.findall(r"key: '([a-z0-9]+)'", js)) == set(TOOLS)
 
 
 def test_global_search_endpoint(client):

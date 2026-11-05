@@ -1,0 +1,51 @@
+/* 🛠 Dev Tools — time & cron group: ⏰ Cron helper (.dt-cron), 🧾 .env converter (.dt-env), ⏳ Duration calculator (.dt-dur) */
+
+.dt-tc-section { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; background: var(--surface); }
+details.dt-tc-section > summary { cursor: pointer; font-weight: 600; }
+details.dt-tc-section[open] > summary { margin-bottom: 8px; }
+.dt-tc-label { font-weight: 500; }
+.dt-cron [hidden], .dt-env [hidden], .dt-dur [hidden] { display: none !important; }
+.dt-tool input.dt-bad, .dt-tool textarea.dt-bad { border-color: var(--err); box-shadow: 0 0 0 1px var(--err); }
+
+/* cron */
+.dt-cron-top { align-items: flex-end; }
+.dt-cron-top select { max-width: 100%; }
+.dt-cron-expr { width: 100%; font-size: 16px; letter-spacing: .04em; }
+.dt-cron-desc { margin: 0; font-size: 17px; font-weight: 600; color: var(--text); min-height: 1.4em; }
+.dt-cron-fields { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.dt-cron-fields:empty { display: none; }
+.dt-cron-field { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 4px; border-radius: 8px;
+  background: var(--surface-2); border: 1px solid var(--border); text-align: center; min-width: 0; }
+.dt-cron-field.err { border-color: var(--err); background: var(--err-soft); }
+.dt-cron-field.err .dt-cron-raw { color: var(--err); }
+.dt-cron-raw { font-size: 15px; font-weight: 600; max-width: 100%; overflow-wrap: anywhere; }
+.dt-cron-table { max-height: 420px; }
+.dt-cron-table td { white-space: nowrap; }
+.dt-cron-bad td { background: var(--err-soft); }
+.dt-cron-builder { align-items: flex-end; gap: 10px; }
+.dt-cron-num { width: 80px; }
+.dt-cron-days { gap: 4px; }
+.dt-cron-days .chip { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.dt-cron-days .chip input { accent-color: var(--accent); margin: 0; }
+.dt-cron-days .chip:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* .env converter */
+.dt-env-out { max-height: 460px; overflow: auto; white-space: pre; }
+.dt-env-out:empty { display: none; }
+.dt-env-val { max-width: 360px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.dt-env-issues { margin: 0; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.dt-env-issues .pill { min-width: 62px; justify-content: center; }
+
+/* duration */
+.dt-dur-field { gap: 4px; min-width: 0; }
+.dt-dur-hint { min-height: 1.2em; overflow-wrap: anywhere; }
+.dt-dur-gap { width: 90px; }
+.dt-dur-gaps td { white-space: nowrap; }
+
+@media (max-width: 600px) {
+  .dt-cron-fields { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px; }
+  .dt-cron-field .small { font-size: 10px; }
+  .dt-cron-raw { font-size: 13px; }
+  .dt-cron-desc { font-size: 15px; }
+  .dt-env-val { max-width: 180px; }
+}
