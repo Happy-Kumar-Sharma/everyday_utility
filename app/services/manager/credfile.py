@@ -237,14 +237,24 @@ def _lock_for(path: Path) -> threading.Lock:
 
 def _atomic_write(path: Path, data: bytes) -> None:
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=path.name + ".tmp-")  # unique, matches the /<rel>* rule
+    f = None
     try:
-        os.fchmod(fd, 0o600)  # owner-only from the first byte
-        with os.fdopen(fd, "wb") as f:
-            f.write(data)
-            f.flush()
-            os.fsync(f.fileno())
+        if hasattr(os, "fchmod"):
+            os.fchmod(fd, 0o600)  # owner-only from the first byte
+        f = os.fdopen(fd, "wb")
+        f.write(data)
+        f.flush()
+        os.fsync(f.fileno())
+        f.close()
         os.replace(tmp, path)
     except BaseException:
+        if f is not None and not f.closed:
+            f.close()
+        else:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
         Path(tmp).unlink(missing_ok=True)
         raise
 

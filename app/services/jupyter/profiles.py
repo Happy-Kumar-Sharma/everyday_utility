@@ -184,15 +184,28 @@ def _save(profiles: list[dict]) -> None:
     except OSError:
         pass
     fd, tmp = tempfile.mkstemp(prefix=".profiles-", suffix=".json", dir=p.parent)
+    f = None
     try:
-        os.fchmod(fd, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(profiles, f, indent=2)
-            f.flush()
-            os.fsync(f.fileno())
+        if hasattr(os, "fchmod"):
+            os.fchmod(fd, 0o600)
+        f = os.fdopen(fd, "w", encoding="utf-8")
+        json.dump(profiles, f, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
+        f.close()
         os.replace(tmp, p)
-        os.chmod(p, 0o600)
+        try:
+            os.chmod(p, 0o600)
+        except OSError:
+            pass
     except BaseException:
+        if f is not None and not f.closed:
+            f.close()
+        else:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
         try:
             os.unlink(tmp)
         except OSError:

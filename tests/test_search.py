@@ -149,7 +149,7 @@ def test_manager_env(client, manager_data):
                     "service": "manager"}]
 
 
-@pytest.mark.skipif(os.geteuid() == 0, reason="root can read chmod 000 files")
+@pytest.mark.skipif(getattr(os, "geteuid", lambda: -1)() == 0, reason="root can read chmod 000 files")
 def test_manager_unreadable_env_file(client, manager_data):
     bad = manager_data["repo"] / "secrets.env"
     bad.write_text("X=1\n")

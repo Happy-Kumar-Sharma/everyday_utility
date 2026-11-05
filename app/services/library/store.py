@@ -392,11 +392,21 @@ def _atomic(path: Path, data: bytes) -> None:
     # keep an existing file's permissions (e.g. the execute bit of a script); new files are owner-only
     mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else 0o600
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    f = None
     try:
-        os.fchmod(fd, mode)
-        with os.fdopen(fd, "wb") as f:
-            f.write(data)
+        if hasattr(os, "fchmod"):
+            os.fchmod(fd, mode)
+        f = os.fdopen(fd, "wb")
+        f.write(data)
+        f.close()
         os.replace(tmp, path)
     except BaseException:
+        if f is not None and not f.closed:
+            f.close()
+        else:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
         Path(tmp).unlink(missing_ok=True)
         raise

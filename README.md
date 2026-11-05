@@ -3,8 +3,14 @@
 A local web app for the things I keep re-searching: one tab per utility, each runnable with a click.
 
 ```bash
-./run.sh            # http://127.0.0.1:8765
+./run.sh            # http://127.0.0.1:8765 (Linux / macOS / Git Bash)
 ./run.sh --reload   # auto-reload while developing
+```
+
+On Windows (PowerShell / CMD):
+```powershell
+.\run.ps1 --reload  # PowerShell
+.\run.bat --reload  # Command Prompt
 ```
 
 Needs Python 3.10+ with `pip install -r requirements.txt` (fastapi, uvicorn, pandas, openpyxl,

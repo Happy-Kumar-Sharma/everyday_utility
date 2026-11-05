@@ -20,12 +20,22 @@ class ClipError(ValueError):
 def write_bytes(path: Path, data: bytes) -> None:
     """Atomic (temp file + rename), mode 600."""
     fd, tmp = tempfile.mkstemp(prefix=".tmp-", dir=str(path.parent))
+    f = None
     try:
-        os.fchmod(fd, 0o600)
-        with os.fdopen(fd, "wb") as f:
-            f.write(data)
+        if hasattr(os, "fchmod"):
+            os.fchmod(fd, 0o600)
+        f = os.fdopen(fd, "wb")
+        f.write(data)
+        f.close()
         os.replace(tmp, path)
     except BaseException:
+        if f is not None and not f.closed:
+            f.close()
+        else:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
         try:
             os.unlink(tmp)
         except OSError:
