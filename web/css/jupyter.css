@@ -1,0 +1,46 @@
+/* Remote Jupyter tab (loaded on demand by web/js/services/jupyter.js). Uses app.css tokens only. */
+.jp-layout { display: grid; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); gap: 16px; margin-top: 16px; align-items: start; }
+@media (max-width: 860px) { .jp-layout { grid-template-columns: minmax(0, 1fr); } }
+
+.jp-list { display: flex; flex-direction: column; gap: 8px; }
+.jp-card { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; text-align: left; font: inherit; color: var(--text); cursor: pointer; }
+.jp-card:hover { border-color: var(--accent); }
+.jp-card.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.jp-card .spacer { flex: 1; }
+.jp-empty { padding: 16px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.jp-ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.jp-mode.tunnel { background: var(--ok-soft); color: var(--ok); }
+.jp-mode.direct { background: var(--warn-soft); color: var(--warn); }
+
+.jp-panel { gap: 16px; min-width: 0; }
+.jp-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; margin: 0; font-size: 13px; }
+.jp-facts dt { color: var(--muted); }
+.jp-facts dd { margin: 0; overflow-wrap: anywhere; }
+.jp-notes { white-space: pre-wrap; }
+
+.jp-checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.jp-check { display: flex; gap: 10px; align-items: flex-start; }
+.jp-icon { flex: none; width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; }
+.jp-check.ok .jp-icon { background: var(--ok-soft); color: var(--ok); }
+.jp-check.err .jp-icon { background: var(--err-soft); color: var(--err); }
+.jp-check.info .jp-icon { background: var(--surface-2); color: var(--muted); }
+.jp-check .jp-hint { color: var(--warn); }
+.jp-check.err .jp-hint { color: var(--err); }
+
+.jp-servers { border: 1px dashed var(--border); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.jp-server .grow { flex: 1; }
+
+.jp-session { border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 10px; background: var(--surface-2); }
+.jp-session.ready { border-color: color-mix(in srgb, var(--ok) 45%, var(--border)); }
+.jp-session.failed { border-color: color-mix(in srgb, var(--err) 45%, var(--border)); }
+.jp-session .spacer { flex: 1; }
+.jp-url-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.jp-url { flex: 1; min-width: 0; overflow-wrap: anywhere; padding: 6px 8px; border-radius: 6px; background: var(--surface); border: 1px solid var(--border); }
+.jp-log summary { cursor: pointer; color: var(--muted); }
+.jp-log[open] summary { margin-bottom: 6px; }
+.jp-note { margin: 0; }
+
+.jp-details > summary { cursor: pointer; list-style: none; }
+.jp-details > summary::-webkit-details-marker { display: none; }
+.jp-details:not([open]) > summary { border-bottom: 0; }
+.jp-form { min-width: min(560px, 80vw); }

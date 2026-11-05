@@ -1,0 +1,39 @@
+/* Web Clipper (web/js/services/clipper.js). Theme colours come from the variables in app.css. */
+
+.clip-page { gap: 16px; }
+.clip-url-row { display: flex; gap: 10px; align-items: stretch; flex-wrap: wrap; }
+.clip-url { flex: 1 1 320px; min-width: 0; font-size: 16px; padding: 10px 12px; }
+.clip-go { font-size: 15px; padding: 8px 18px; }
+.clip-opts { gap: 10px 14px; }
+.clip-label { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.seg button:disabled { opacity: .45; cursor: not-allowed; }
+
+.clip-progress { display: flex; flex-direction: column; gap: 8px; }
+.clip-bar { height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.clip-bar > div { height: 100%; background: var(--accent); transition: width .3s ease; }
+
+.clip-result .card-head h2 { margin: 0; font-size: 16px; min-width: 0; overflow-wrap: anywhere; }
+.clip-meta { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.clip-src { overflow-wrap: anywhere; color: var(--accent); }
+.clip-path code { overflow-wrap: anywhere; background: var(--surface-2); padding: 3px 6px; border-radius: 6px; }
+.clip-result a.btn { text-decoration: none; }
+
+.clip-md { max-height: 520px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+
+.clip-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.clip-thumb { display: flex; flex-direction: column; gap: 4px; padding: 6px; border: 1px solid var(--border); border-radius: 8px;
+  text-decoration: none; color: inherit; background: var(--surface); min-width: 0; }
+.clip-thumb:hover { border-color: var(--accent); }
+.clip-thumb img { width: 100%; height: 110px; object-fit: contain; background: var(--surface-2); border-radius: 4px; }
+.clip-thumb span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.clip-fails { max-height: 60vh; overflow: auto; display: flex; flex-direction: column; gap: 6px; }
+.clip-fail { padding: 6px 8px; border-radius: 6px; background: var(--surface-2); }
+.clip-fail-url { overflow-wrap: anywhere; }
+
+.clip-history { display: flex; flex-direction: column; gap: 6px; }
+.clip-item { display: flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 6px 4px 0; }
+.clip-item:hover { background: var(--surface-2); }
+.clip-item-main { flex: 1; min-width: 0; text-align: left; border: 0; background: none; color: inherit; font: inherit; padding: 6px 12px; cursor: pointer; }
+.clip-item-main:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 6px; }
+.clip-item-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
