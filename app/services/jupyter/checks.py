@@ -7,7 +7,10 @@ import shlex
 import shutil
 import socket
 import stat
+import subprocess
 from pathlib import Path
+
+from app.core import platform as plat
 
 from .profiles import ssh_port
 
@@ -25,6 +28,8 @@ def key_check(path: str) -> dict:
     if not p.is_file():
         return _check("Key file", False, f"{p} is not a file", "Pick the private key file itself.")
     mode = stat.S_IMODE(p.stat().st_mode)
+    if plat.IS_WINDOWS:  # st_mode carries no owner/group/other bits there; Windows OpenSSH checks the ACL instead
+        return _windows_key_check(p)
     if mode & 0o077:
         return _check("Key file", False, f"{p} is readable by others (mode {mode:04o}); ssh refuses such keys",
                       f"chmod 600 {shlex.quote(str(p))}", fixable=True)
@@ -37,11 +42,50 @@ def fix_key_perms(path: str) -> str:
     p = Path(path).expanduser()
     if not p.is_file():
         raise FileNotFoundError(str(p))
-    os.chmod(p, 0o600)
+    if plat.IS_WINDOWS:
+        r = subprocess.run(_icacls_fix(p), stdin=subprocess.DEVNULL, capture_output=True, text=True, errors="replace",
+                           timeout=15, **plat.no_window_kwargs())
+        if r.returncode != 0:
+            raise PermissionError((r.stdout + r.stderr).strip() or f"icacls failed ({r.returncode})")
+        return str(p)
+    plat.chmod_private(p, 0o600)
     return str(p)
 
 
+# well-known groups whose access makes Windows OpenSSH refuse a key ("UNPROTECTED PRIVATE KEY FILE"); icacls prints
+# localized names, so no match only means "not detected", never "safe"
+_BROAD_GROUPS = ("everyone:", "builtin\\users:", "authenticated users:")
+
+
+def _icacls_fix(p: Path) -> list[str]:
+    user = os.environ.get("USERNAME", "")
+    domain = os.environ.get("USERDOMAIN", "")
+    who = f"{domain}\\{user}" if domain and user else user or "%USERNAME%"
+    return ["icacls", str(p), "/inheritance:r", "/grant:r", f"{who}:R"]
+
+
+def _windows_key_check(p: Path) -> dict:
+    if not os.access(p, os.R_OK):
+        return _check("Key file", False, f"{p} is not readable by you", "Check the file owner.")
+    fix = subprocess.list2cmdline(_icacls_fix(p))
+    try:
+        r = subprocess.run(["icacls", str(p)], stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                           errors="replace", timeout=10, **plat.no_window_kwargs())
+        acl = r.stdout.lower() if r.returncode == 0 else ""
+    except (OSError, subprocess.SubprocessError):
+        acl = ""
+    broad = [g.rstrip(":") for g in _BROAD_GROUPS if g in acl]
+    if broad:
+        return _check("Key file", False, f"{p} is accessible to {', '.join(broad)}; Windows OpenSSH refuses such keys",
+                      f"Run: {fix}  (or keep the key under %USERPROFILE%\\.ssh)")
+    return _check("Key file", True, f"{p} (Windows OpenSSH checks the file's ACL when connecting)",
+                  f"If ssh reports an UNPROTECTED PRIVATE KEY FILE, run: {fix}", level="info")
+
+
 def vpn_interfaces() -> list[str]:
+    if plat.IS_WINDOWS:
+        # TAP / Wintun adapters stay installed while disconnected: only "up" ones (state "" = unknown, keep it)
+        return [a["name"] for a in plat.windows_vpn_adapters() if a["state"] in ("up", "")]
     names: set[str] = set()
     try:
         names.update(os.listdir("/sys/class/net"))
@@ -108,5 +152,6 @@ def run(profile: dict, *, port_in_use_by_session: bool = False) -> list[dict]:
 
     ssh = shutil.which("ssh")
     out.append(_check("ssh client", bool(ssh), ssh or "ssh not found on PATH",
-                      "" if ssh else "Install the OpenSSH client: sudo apt install openssh-client"))
+                      "" if ssh else ("Install the OpenSSH client (Settings → Optional features) or Git for Windows"
+                                     if plat.IS_WINDOWS else "Install the OpenSSH client: sudo apt install openssh-client")))
     return out

@@ -33,7 +33,7 @@ class SettingsStore:
         values = service.defaults()
         path = self._path(service.id)
         if path.exists():
-            saved = json.loads(path.read_text())
+            saved = json.loads(path.read_text(encoding="utf-8"))
             # only known keys survive, so renamed/removed settings don't linger
             values.update({k: v for k, v in saved.items() if k in values})
         return values
@@ -50,7 +50,7 @@ class SettingsStore:
     def save(self, service: Service, values: dict) -> dict:
         merged = self.merge(service, values)
         self.root.mkdir(parents=True, exist_ok=True)
-        self._path(service.id).write_text(json.dumps(merged, indent=2))
+        self._path(service.id).write_text(json.dumps(merged, indent=2), encoding="utf-8")
         return merged
 
     def reset(self, service: Service) -> dict:

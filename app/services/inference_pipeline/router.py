@@ -204,7 +204,7 @@ def _sql_job(s: dict, step: str, title: str, query: str, out_csv: Path) -> dict:
         raise HTTPException(400, str(e)) from e
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     sql_file = OUTPUT_DIR / f"{step}-{time.strftime('%Y%m%d-%H%M%S')}.sql"
-    sql_file.write_text(query)
+    sql_file.write_text(query, encoding="utf-8")
     script, display = export_csv_script(sql_file, out_csv)
     cmd = commands.Command(title, script, display)
     # db target is user@host:port/db, never the password

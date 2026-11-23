@@ -7,6 +7,16 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from .platform import no_window_kwargs
+
+
+def _git(args: list[str], **kw) -> subprocess.CompletedProcess:
+    """Run git; a missing git (e.g. Windows without Git for Windows) reads as an error exit, i.e. NOT safe."""
+    try:
+        return subprocess.run(["git", *args], capture_output=True, text=True, errors="replace", **no_window_kwargs(), **kw)
+    except OSError as e:
+        return subprocess.CompletedProcess(["git", *args], 127, "", str(e))
+
 
 def git_root(path: Path) -> Path | None:
     for d in [path.parent, *path.parent.parents]:
@@ -16,18 +26,17 @@ def git_root(path: Path) -> Path | None:
 
 
 def git_ignored(work_tree: Path, rel: str, git_dir: Path | None = None) -> bool:
-    cmd = ["git"]
+    cmd = []
     if git_dir is not None:
         cmd += [f"--git-dir={git_dir}", f"--work-tree={work_tree}"]
     else:
         cmd += ["-C", str(work_tree)]
-    res = subprocess.run(cmd + ["check-ignore", "-q", "--no-index", rel], capture_output=True, text=True, cwd=work_tree)
+    res = _git(cmd + ["check-ignore", "-q", "--no-index", rel], cwd=work_tree)
     return res.returncode == 0  # 1 = not ignored, 128 = error: both treated as NOT safe
 
 
 def git_tracked(root: Path, rel: str) -> bool:
-    return subprocess.run(["git", "-C", str(root), "ls-files", "--error-unmatch", rel],
-                          capture_output=True, text=True).returncode == 0
+    return _git(["-C", str(root), "ls-files", "--error-unmatch", rel]).returncode == 0
 
 
 def path_safety(path: Path, app_root: Path) -> dict:
@@ -45,7 +54,7 @@ def path_safety(path: Path, app_root: Path) -> dict:
     except ValueError:
         return {"in_repo": False, "safe": True}
     with tempfile.TemporaryDirectory() as tmp:
-        subprocess.run(["git", "init", "-q", "--bare", tmp], capture_output=True, check=False)
+        _git(["init", "-q", "--bare", tmp])
         ignored = git_ignored(app_root, rel, Path(tmp))
     return {"in_repo": True, "repo": str(app_root), "rel": rel, "ignored": ignored, "tracked": False, "safe": ignored}
 
@@ -68,7 +77,7 @@ def dir_safety(folder: Path, app_root: Path) -> dict:
     root = git_root(folder / "x")
     if root is not None:
         rel = folder.relative_to(root).as_posix()
-        tracked = subprocess.run(["git", "-C", str(root), "ls-files", "--", rel], capture_output=True, text=True).stdout.strip()
+        tracked = _git(["-C", str(root), "ls-files", "--", rel]).stdout.strip()
         if tracked:
             main.update(safe=False, tracked=True)
     return main

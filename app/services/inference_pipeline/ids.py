@@ -37,7 +37,7 @@ def parse_ids(values: list[str] | str) -> dict:
 def read_ids_file(path: Path) -> list[int]:
     if not path.is_file():
         return []
-    return parse_ids(path.read_text())["ids"]
+    return parse_ids(path.read_text(encoding="utf-8"))["ids"]
 
 
 def write_ids_file(path: Path, ids: list[int]) -> Path | None:
@@ -50,6 +50,6 @@ def write_ids_file(path: Path, ids: list[int]) -> Path | None:
         backup = path.with_name(f"{path.name}.{time.strftime('%Y%m%d-%H%M%S')}.bak")
         shutil.copy2(path, backup)
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text("\n".join(map(str, ids)) + "\n")
+    tmp.write_text("\n".join(map(str, ids)) + "\n", encoding="utf-8")
     tmp.replace(path)
     return backup

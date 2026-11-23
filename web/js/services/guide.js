@@ -17,7 +17,9 @@ export async function mount(root) {
 
   const sections = [
     ['start', '🚀 Quick start', () => [
-      p('Everything runs locally on ', code(info.url), ' — nothing is sent anywhere. Start it from a terminal:'),
+      p(b('Desktop app'), ': after a one-time install, start it from the ', b('Everyday Utility'), ' icon (Ubuntu app grid / dock, Windows Start menu) — it starts the server in the background and opens its own window; right-click the icon to stop it. Steps for Ubuntu, Windows and WSL: ', code('install.md'), '.'),
+      codeBlock(`cd ${R}\nbash scripts/install_linux.sh      # Windows: double-click scripts\\install_windows.bat`),
+      p('Everything runs locally on ', code(info.url), ' — nothing is sent anywhere. Or start it from a terminal:'),
       codeBlock(`cd ${R}\n./run.sh`),
       p('Then open ', h('a', { href: info.url }, info.url), '. Stop it with ', b('Ctrl+C'), '. Background jobs stop with the server.'),
       p(b('First time on a machine'), ' (Python 3.10+; ', code('psql'), ' is only needed for the pipeline SQL steps):'),

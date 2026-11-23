@@ -6,16 +6,25 @@ import codecs
 import os
 import re
 import shutil
-import signal
 import subprocess
 import tempfile
 import threading
 
 import httpx
 
+from app.core import platform as plat
+
 from .netguard import FetchError, Policy, Response, TooLarge, check_url, fetch, open_stream
 
 CHROME_NAMES = ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "chrome")
+CHROME_PATHS = ("/usr/bin/google-chrome", "/usr/bin/chromium", "/snap/bin/chromium",
+                "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
+# Windows: (env var with the base folder, path below it); Edge is Chromium and supports --dump-dom too
+CHROME_WINDOWS = (("ProgramFiles", r"Google\Chrome\Application\chrome.exe"),
+                  ("ProgramFiles(x86)", r"Google\Chrome\Application\chrome.exe"),
+                  ("LocalAppData", r"Google\Chrome\Application\chrome.exe"),
+                  ("ProgramFiles(x86)", r"Microsoft\Edge\Application\msedge.exe"),
+                  ("ProgramFiles", r"Microsoft\Edge\Application\msedge.exe"))
 _META_CHARSET = re.compile(rb"""<meta[^>]+charset\s*=\s*["']?\s*([A-Za-z0-9_.:-]+)""", re.I)
 _ACTIVE: set[subprocess.Popen] = set()
 _ACTIVE_LOCK = threading.Lock()
@@ -36,7 +45,11 @@ def find_chrome() -> str | None:
         path = shutil.which(name)
         if path:
             return path
-    for path in ("/usr/bin/google-chrome", "/usr/bin/chromium", "/snap/bin/chromium"):
+    if plat.IS_WINDOWS:
+        paths = [os.environ[var] + "\\" + rel for var, rel in CHROME_WINDOWS if os.environ.get(var)]
+    else:
+        paths = list(CHROME_PATHS)
+    for path in paths:
         if os.path.isfile(path) and os.access(path, os.X_OK):
             return path
     return None
@@ -107,10 +120,7 @@ def kill_active() -> None:
     with _ACTIVE_LOCK:
         procs = list(_ACTIVE)
     for p in procs:
-        try:
-            os.killpg(p.pid, signal.SIGKILL)
-        except (ProcessLookupError, PermissionError):
-            pass
+        plat.kill_process_tree(p, force=True)
 
 
 def run_chrome(chrome: str, url: str, *, user_agent: str, wait_ms: int, max_bytes: int, policy: Policy) -> str:
@@ -121,13 +131,13 @@ def run_chrome(chrome: str, url: str, *, user_agent: str, wait_ms: int, max_byte
     try:
         proc = subprocess.Popen(chrome_command(chrome, url, user_agent=user_agent, wait_ms=wait_ms, profile=profile),
                                 stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                start_new_session=True)
+                                **plat.popen_group_kwargs())
         with _ACTIVE_LOCK:
             _ACTIVE.add(proc)
         try:
             out, err = proc.communicate(timeout=wait_ms / 1000 + 60)
         except subprocess.TimeoutExpired:
-            os.killpg(proc.pid, signal.SIGKILL)
+            plat.kill_process_tree(proc, force=True)
             proc.communicate()
             raise FetchError(f"Chrome did not finish within {wait_ms / 1000 + 60:.0f} s") from None
         if len(out) > max_bytes:
@@ -140,8 +150,9 @@ def run_chrome(chrome: str, url: str, *, user_agent: str, wait_ms: int, max_byte
         if proc is not None:
             with _ACTIVE_LOCK:
                 _ACTIVE.discard(proc)
-            try:
-                os.killpg(proc.pid, signal.SIGKILL)  # leftover renderer / zygote processes
-            except (ProcessLookupError, PermissionError):
-                pass
+            if plat.IS_WINDOWS:  # taskkill on an exited leader fails anyway, and costs a process spawn
+                if proc.poll() is None:
+                    plat.kill_process_tree(proc, force=True)
+            else:
+                plat.kill_process_tree(proc, force=True)  # leftover renderer / zygote processes
         shutil.rmtree(profile, ignore_errors=True)

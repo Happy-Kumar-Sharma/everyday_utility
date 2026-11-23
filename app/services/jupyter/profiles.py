@@ -16,6 +16,7 @@ import uuid
 from pathlib import Path
 
 from app.core import config
+from app.core.platform import chmod_private, fchmod_private
 
 MODES = ("tunnel", "direct")
 HOST_RE = re.compile(r"^(?=.{1,253}$)[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$")
@@ -180,14 +181,13 @@ def _save(profiles: list[dict]) -> None:
     p = _path()
     p.parent.mkdir(parents=True, exist_ok=True)
     try:
-        os.chmod(p.parent, 0o700)
+        chmod_private(p.parent, 0o700)
     except OSError:
         pass
     fd, tmp = tempfile.mkstemp(prefix=".profiles-", suffix=".json", dir=p.parent)
     f = None
     try:
-        if hasattr(os, "fchmod"):
-            os.fchmod(fd, 0o600)
+        fchmod_private(fd, 0o600)
         f = os.fdopen(fd, "w", encoding="utf-8")
         json.dump(profiles, f, indent=2)
         f.flush()
@@ -195,7 +195,7 @@ def _save(profiles: list[dict]) -> None:
         f.close()
         os.replace(tmp, p)
         try:
-            os.chmod(p, 0o600)
+            chmod_private(p, 0o600)
         except OSError:
             pass
     except BaseException:

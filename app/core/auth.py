@@ -28,6 +28,7 @@ from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 
 from . import audit, config
+from .platform import O_BINARY, chmod_private
 
 COOKIE = "eu_session"
 MIN_PASSWORD_LEN = 10
@@ -70,12 +71,12 @@ def set_password(password: str) -> None:
     data = {"algo": "scrypt", **SCRYPT, "salt": salt.hex(), "hash": _hash(password, salt, **SCRYPT).hex()}
     path = _password_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    os.chmod(path.parent, 0o700)
+    chmod_private(path.parent, 0o700)
     tmp = path.with_suffix(".tmp")
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | O_BINARY, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as f:
         json.dump(data, f)
-    os.chmod(tmp, 0o600)
+    chmod_private(tmp, 0o600)
     os.replace(tmp, path)
 
 

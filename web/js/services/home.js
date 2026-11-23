@@ -8,6 +8,8 @@ import { clear, copyText, fmt, h, loadCss, store, toast, toastError } from '../c
 import { fillTemplate, placeholders } from '../core/highlight.js';
 import { parseQuick } from './planner.js';
 
+const DESKTOP_SOURCES = { gnome: 'Measured from GNOME idle time', windows: 'Measured from Windows idle time' };
+
 const CHANGED = 'planner:changed';
 const REFRESH_MS = 30_000;
 const TYPE_ICON = { sql: '🗄️', mongo: '🍃', shell: '💻', python: '🐍', link: '🔗', note: '📝', json: '🧾', yaml: '🧾' };
@@ -120,7 +122,8 @@ function startWellbeing() {
 /** Browser fallback for screen time: only while GNOME idle time is unavailable, this tab is visible and in use. */
 async function heartbeat() {
   const s = wb.data?.screen;
-  if (!s || s.error || s.source === 'gnome' || document.visibilityState !== 'visible') return;
+  // a desktop idle source (GNOME / Windows) measures real screen time; browser heartbeats only fill in without one
+  if (!s || s.error || DESKTOP_SOURCES[s.source] || document.visibilityState !== 'visible') return;
   if (Date.now() - wb.lastInput > (s.idle_seconds || 120) * 1000) return;
   try { await post('/api/home/screen/heartbeat'); } catch { /* server restarting */ }
 }
@@ -262,7 +265,7 @@ function wellbeingCards(service) {
   function drawScreen(s, loadError) {
     if (showErr(sc.err, s, loadError) || !s) return;
     sc.big.textContent = hm(s.today_minutes);
-    sc.source.textContent = s.source === 'gnome' ? 'Measured from GNOME idle time' : 'Time active in this app (desktop idle time unavailable)';
+    sc.source.textContent = DESKTOP_SOURCES[s.source] || 'Time active in this app (desktop idle time unavailable)';
     const hour = new Date().getHours();
     s.hourly.forEach((n, i) => {
       const bar = sc.bars[i];

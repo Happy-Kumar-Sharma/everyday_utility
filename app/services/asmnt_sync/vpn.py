@@ -7,6 +7,8 @@ import socket
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from app.core import platform as plat
+
 PREFIXES = ("tun", "tap", "wg", "ppp", "utun")
 PROBE_TIMEOUT = 3.0
 _HOST_RE = re.compile(r"^(?=.{1,253}$)[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$")
@@ -19,6 +21,8 @@ def _is_vpn(name: str) -> bool:
 
 
 def interfaces() -> list[dict]:
+    if plat.IS_WINDOWS:
+        return [{"name": a["name"], "state": a["state"]} for a in plat.windows_vpn_adapters()]
     names: list[str] = []
     try:
         names = sorted(p.name for p in SYS_NET.iterdir())
