@@ -34,6 +34,7 @@ import time
 from pathlib import Path
 
 from app.core.gitsafety import all_safe, git_tracked
+from app.core.platform import fchmod_private
 
 FIELDS = ("url", "username", "password", "tags")
 LABELS = {"url": "URL", "username": "Username", "password": "Password", "tags": "Tags"}
@@ -173,12 +174,12 @@ def add_to_gitignore(repo: Path, rel: str) -> None:
     if (repo / ".git").exists() and git_tracked(repo, rel):
         raise CredError(f"{rel} is already tracked by git; run `git rm --cached {rel}` first")
     gi = repo / ".gitignore"
-    text = gi.read_text() if gi.exists() else ""
+    text = gi.read_text(encoding="utf-8") if gi.exists() else ""
     line = f"/{rel}*"  # the file plus its .bak / .tmp-* siblings
     if line in text.splitlines():
         return
     sep = "" if not text or text.endswith("\n") else "\n"
-    gi.write_text(f"{text}{sep}\n# added by Everyday Utility: private credentials file (+ .bak / temp)\n{line}\n")
+    gi.write_text(f"{text}{sep}\n# added by Everyday Utility: private credentials file (+ .bak / temp)\n{line}\n", encoding="utf-8")
 
 
 # ---- location rules ---------------------------------------------------------------------------------
@@ -239,8 +240,7 @@ def _atomic_write(path: Path, data: bytes) -> None:
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=path.name + ".tmp-")  # unique, matches the /<rel>* rule
     f = None
     try:
-        if hasattr(os, "fchmod"):
-            os.fchmod(fd, 0o600)  # owner-only from the first byte
+        fchmod_private(fd, 0o600)  # owner-only from the first byte
         f = os.fdopen(fd, "wb")
         f.write(data)
         f.flush()

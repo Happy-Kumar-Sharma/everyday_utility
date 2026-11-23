@@ -9,6 +9,8 @@ from __future__ import annotations
 import shlex
 from pathlib import Path
 
+from .platform import bash_path
+
 REQUIRED = ("POSTGRES_USER", "POSTGRES_HOST", "POSTGRES_DB")
 
 
@@ -19,7 +21,7 @@ class PostgresConfigError(ValueError):
 def read_env_file(path: Path) -> dict:
     """Parse ``export KEY=VALUE`` lines (later lines win, comments ignored) — same rules as the aicdb scripts."""
     env: dict[str, str] = {}
-    for line in path.read_text().splitlines():
+    for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line.startswith("export "):
             continue
@@ -61,18 +63,19 @@ def describe_target(env: dict) -> str:
 
 def export_csv_script(sql_file: Path, out_csv: Path) -> tuple[str, str]:
     """(script, display) that runs sql_file and writes the result set to out_csv with a header."""
-    q_sql, q_out = shlex.quote(str(sql_file)), shlex.quote(str(out_csv))
+    sql, out = bash_path(sql_file), bash_path(out_csv)  # C:/… on Windows: Git bash and psql.exe accept it
+    q_sql, q_out = shlex.quote(sql), shlex.quote(out)
     # psql truncates its -o file before connecting; writing to a temp file keeps the previous CSV
     # intact when the query fails
-    q_tmp = shlex.quote(str(out_csv) + ".partial")
+    q_tmp = shlex.quote(out + ".partial")
     script = (
         "set -euo pipefail\n"
         f'echo "connecting to $PGUSER@$PGHOST:$PGPORT/$PGDATABASE"\n'
-        f"mkdir -p {shlex.quote(str(out_csv.parent))}\n"
+        f"mkdir -p {shlex.quote(bash_path(out_csv.parent))}\n"
         f"trap 'rm -f {q_tmp}' EXIT\n"
         f"psql -X -q -v ON_ERROR_STOP=1 --csv -f {q_sql} -o {q_tmp}\n"
         f"mv -f {q_tmp} {q_out}\n"
-        f'echo "wrote {out_csv} ($(( $(wc -l < {q_out}) - 1 )) lines)"\n'
+        f'echo "wrote {out} ($(( $(wc -l < {q_out}) - 1 )) lines)"\n'
     )
     display = f"psql --csv -f {q_sql} -o {q_out}   # PG* env from credentials file"
     return script, display

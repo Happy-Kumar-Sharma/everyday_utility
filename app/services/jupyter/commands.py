@@ -13,6 +13,8 @@ import shlex
 from dataclasses import dataclass
 from pathlib import Path
 
+from app.core.platform import bash_path
+
 from .profiles import parse_extra_args
 
 SSH = "ssh"  # resolved via PATH (tests put a stub first on PATH)
@@ -32,7 +34,7 @@ class Command:
 
 
 def key_path(profile: dict) -> str:
-    return str(Path(profile["key_path"]).expanduser())
+    return bash_path(Path(profile["key_path"]).expanduser())  # C:/… on Windows: Git bash's and Windows' ssh accept it
 
 
 def _q(argv: list[str]) -> str:

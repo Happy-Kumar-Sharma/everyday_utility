@@ -30,6 +30,16 @@ def _on_term(signum, _frame):
     raise Cancelled()
 
 
+def _utf8_stdout() -> None:
+    """The job reader decodes UTF-8; jobs set PYTHONIOENCODING, this covers a worker started some other way."""
+    enc = (getattr(sys.stdout, "encoding", None) or "").lower().replace("_", "-")
+    if enc not in ("utf-8", "utf8"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError, OSError):
+            pass
+
+
 def say(line: str) -> None:
     print(line, flush=True)
 
@@ -48,6 +58,7 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None, *, policy: Policy = public_only, **clip_kwargs) -> int:
     args = parse_args(argv)
+    _utf8_stdout()
     signal.signal(signal.SIGTERM, _on_term)
     target = strip_query(args.url)
     try:

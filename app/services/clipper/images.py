@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import io
-import os
 import re
 import threading
 import time
@@ -15,6 +14,8 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 import httpx
+
+from app.core.platform import chmod_private
 
 from .markdown import decode_data_uri
 from .netguard import BlockedURL, FetchError, Policy, open_stream, read_capped, strip_query
@@ -188,7 +189,7 @@ class Downloader:
         res = Result()
         res.found = len(items)
         self.out_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
-        os.chmod(self.out_dir, 0o700)
+        chmod_private(self.out_dir, 0o700)
 
         if network:
             for url in covers[:3]:

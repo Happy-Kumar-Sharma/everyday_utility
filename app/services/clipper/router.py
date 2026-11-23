@@ -17,6 +17,7 @@ from starlette.background import BackgroundTask
 from app.core import audit, config, context
 from app.core.gitsafety import dir_safety
 from app.core.jobs import JobConflict
+from app.core.platform import bash_path
 
 from . import fetcher, storage
 from .netguard import BlockedURL, check_url, strip_query
@@ -38,7 +39,7 @@ router = APIRouter()
 
 def _python_cmd() -> list[str]:
     """How the worker process is started (tests replace this with a wrapper that injects a test policy)."""
-    return [sys.executable, "-m", "app.services.clipper.cli"]
+    return [bash_path(sys.executable), "-m", "app.services.clipper.cli"]  # this interpreter, not "python3"
 
 
 def _root() -> Path:
@@ -149,7 +150,7 @@ def start_clip(req: ClipReq):
     root = _writable_root()
     settings = context.service_settings(SERVICE_ID)
     worker = {k: settings[k] for k in SETTING_KEYS}
-    argv = [*_python_cmd(), "--url", url, "--out", str(root), "--mode", req.mode, "--content", req.content,
+    argv = [*_python_cmd(), "--url", url, "--out", bash_path(root), "--mode", req.mode, "--content", req.content,
             "--settings-json", json.dumps(worker)]
     if not req.download_images:
         argv.append("--no-images")

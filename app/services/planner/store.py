@@ -64,7 +64,7 @@ class PlannerStore:
     # ---- persistence ----------------------------------------------------------------------------
     def _load(self) -> dict:
         if self.path.is_file():
-            data = json.loads(self.path.read_text())
+            data = json.loads(self.path.read_text(encoding="utf-8"))
         else:
             data = {}
         data.setdefault("tasks", [])
@@ -79,7 +79,7 @@ class PlannerStore:
         if self.path.exists():
             shutil.copy2(self.path, self.path.with_suffix(".json.bak"))
         tmp = self.path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(data, indent=1))
+        tmp.write_text(json.dumps(data, indent=1), encoding="utf-8")
         tmp.replace(self.path)
 
     # ---- tasks ----------------------------------------------------------------------------------

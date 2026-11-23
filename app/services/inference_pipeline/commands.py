@@ -10,6 +10,8 @@ import shlex
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from app.core import platform as plat
+
 
 @dataclass
 class Command:
@@ -20,12 +22,12 @@ class Command:
 
 
 def _p(value: str) -> str:
-    """Expand ~ and shell-quote a path."""
-    return shlex.quote(str(Path(str(value)).expanduser()))
+    """Expand ~ and shell-quote a path (C:/… on Windows, which Git bash and Windows programs both accept)."""
+    return shlex.quote(plat.bash_path(Path(str(value)).expanduser()))
 
 
 def _activate(venv: str) -> str:
-    return f"source {_p(venv)}/bin/activate"
+    return f"source {_p(venv)}/{'Scripts' if plat.IS_WINDOWS else 'bin'}/activate"
 
 
 def _render(steps: list[str]) -> tuple[str, str]:
@@ -60,7 +62,7 @@ def _model_env(s: dict) -> list[str]:
 
 def predict_batched(s: dict) -> Command:
     args = [
-        "python3", "predict_from_csv_batched.py",
+        "python", "predict_from_csv_batched.py",  # the activated venv's python (no python3.exe on Windows)
         "-i", _p(s["pred_input_csv"]),
         "-o", _p(s["pred_output_jsonl"]),
         "--bucket", shlex.quote(s["bucket"]),
@@ -77,7 +79,7 @@ def predict_batched(s: dict) -> Command:
 
 def predict_single(s: dict) -> Command:
     args = [
-        "CUDA_LAUNCH_BLOCKING=1", "python3", "predict_from_csv.py",
+        "CUDA_LAUNCH_BLOCKING=1", "python", "predict_from_csv.py",
         "-i", _p(s["pred_input_csv"]),
         "-o", _p(s["pred_output_jsonl"]),
     ]

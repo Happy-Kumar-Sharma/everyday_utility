@@ -24,6 +24,8 @@ import time
 import uuid
 from pathlib import Path
 
+from app.core.platform import fchmod_private
+
 META_FILE = ".library.json"
 TRASH = ".trash"
 MAX_CONTENT = 512 * 1024  # bigger files are listed but not loaded into the browser
@@ -95,7 +97,7 @@ class Library:
         f = self.root / META_FILE
         if f.is_file():
             try:
-                return json.loads(f.read_text())
+                return json.loads(f.read_text(encoding="utf-8"))
             except ValueError:
                 return {}
         return {}
@@ -394,8 +396,7 @@ def _atomic(path: Path, data: bytes) -> None:
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
     f = None
     try:
-        if hasattr(os, "fchmod"):
-            os.fchmod(fd, mode)
+        fchmod_private(fd, mode)
         f = os.fdopen(fd, "wb")
         f.write(data)
         f.close()

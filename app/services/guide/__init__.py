@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.core import audit, config, context
+from app.core.platform import O_BINARY
 from app.core.registry import Service
 
 router = APIRouter()
@@ -111,7 +112,7 @@ def _backup(req: BackupRequest) -> dict:
     dest.mkdir(parents=True, exist_ok=True)
     added: list[str] = []
     # owner-only from the first byte, never overwrite an existing file
-    fd = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    fd = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_EXCL | O_BINARY, 0o600)
     with os.fdopen(fd, "wb") as fh, zipfile.ZipFile(fh, "w", zipfile.ZIP_DEFLATED) as z:
         for part in req.parts:
             base = config.DATA_DIR / part

@@ -10,6 +10,8 @@ import time
 import unicodedata
 from pathlib import Path
 
+from app.core.platform import chmod_private, fchmod_private
+
 NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,120}$")
 
 
@@ -22,8 +24,7 @@ def write_bytes(path: Path, data: bytes) -> None:
     fd, tmp = tempfile.mkstemp(prefix=".tmp-", dir=str(path.parent))
     f = None
     try:
-        if hasattr(os, "fchmod"):
-            os.fchmod(fd, 0o600)
+        fchmod_private(fd, 0o600)
         f = os.fdopen(fd, "wb")
         f.write(data)
         f.close()
@@ -49,7 +50,7 @@ def write_text(path: Path, text: str) -> None:
 
 def make_dir(path: Path) -> None:
     path.mkdir(mode=0o700, parents=True, exist_ok=True)
-    os.chmod(path, 0o700)
+    chmod_private(path, 0o700)
 
 
 def slugify(text: str, limit: int = 60) -> str:

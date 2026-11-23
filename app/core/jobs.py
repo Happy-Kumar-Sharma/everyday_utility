@@ -1,7 +1,8 @@
 """Background shell jobs with live, resumable log output.
 
 A job is a bash script run in its own process group (so cancel kills the whole tree, e.g. python + its
-worker threads/processes). Output is captured from a merged stdout/stderr pipe:
+worker threads/processes); on Windows bash comes from Git for Windows (see app.core.platform). Output is
+captured from a merged stdout/stderr pipe:
 
 * lines ended by ``\\n`` are *committed* and never change; they get absolute indexes so a client can
   resume with ``since=<n>`` after a reconnect;
@@ -15,7 +16,6 @@ from __future__ import annotations
 
 import codecs
 import os
-import signal
 import subprocess
 import threading
 import time
@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import audit
+from .platform import BASH_MISSING, find_bash, kill_process_tree, popen_group_kwargs
 
 RUNNING, SUCCEEDED, FAILED, CANCELLED = "running", "succeeded", "failed", "cancelled"
 
@@ -174,24 +175,37 @@ class JobManager:
             self._prune()
         _audit_start(job)
 
-        full_env = {**os.environ, "PYTHONUNBUFFERED": "1", **(env or {})}
+        bash = find_bash()
+        if not bash:
+            return self._fail(job, BASH_MISSING)
+        # PYTHONIOENCODING: Python children write UTF-8 like _pump decodes (on Windows a pipe would otherwise get
+        # the ANSI code page, strict: e.g. a CJK clip title would crash the clipper worker). A caller's env still wins.
+        full_env = {**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8", **(env or {})}
         try:
             proc = subprocess.Popen(
-                ["bash", "-c", script],
+                [bash, "-c", script],
                 cwd=cwd or None,
                 env=full_env,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                start_new_session=True,  # own process group -> cancel kills children too
+                **popen_group_kwargs(),  # own process group -> cancel kills children too
             )
         except OSError as e:
-            job._feed(f"failed to start: {e}\n")
-            job.status, job.exit_code, job.ended_at = FAILED, -1, time.time()
-            _audit_finish(job)
-            return job
+            return self._fail(job, f"failed to start: {e}")
         job._proc = proc
         threading.Thread(target=self._pump, args=(job, proc), daemon=True, name=f"job-{job_id}").start()
+        return job
+
+    @staticmethod
+    def _fail(job: Job, message: str) -> Job:
+        job._feed(message + "\n")
+        try:
+            job.log_path.write_text(f"$ {job.display}\n\n{message}\n", encoding="utf-8")
+        except OSError:
+            pass
+        job.status, job.exit_code, job.ended_at = FAILED, -1, time.time()
+        _audit_finish(job)
         return job
 
     def _pump(self, job: Job, proc: subprocess.Popen) -> None:
@@ -224,7 +238,7 @@ class JobManager:
         except Exception as e:  # never leave a job stuck in RUNNING
             error = e
             job._feed(f"\n[everyday-utility] output reader crashed: {e!r}\n")
-            self._kill_group(proc.pid, signal.SIGKILL)
+            kill_process_tree(proc, force=True)
         finally:
             if log_file:
                 log_file.close()
@@ -237,14 +251,6 @@ class JobManager:
             else:
                 job.status = SUCCEEDED if code == 0 and error is None else FAILED
             _audit_finish(job)
-
-    @staticmethod
-    def _kill_group(pgid: int, sig: int) -> bool:
-        try:
-            os.killpg(pgid, sig)
-            return True
-        except (ProcessLookupError, PermissionError):
-            return False
 
     def _prune(self) -> None:
         finished = [j for j in self._jobs.values() if j.done]
@@ -262,15 +268,15 @@ class JobManager:
         if not job or job.done or not job._proc:
             return job
         job._cancel_requested = True
-        pgid = job._proc.pid  # start_new_session: the group id is the leader's pid
-        if not self._kill_group(pgid, signal.SIGTERM):
+        proc = job._proc
+        if not kill_process_tree(proc):
             return job
 
         def _escalate():
             time.sleep(grace)
             # check the job, not the bash leader: children that ignore SIGTERM keep the pipe (and job) open
             if not job.done:
-                self._kill_group(pgid, signal.SIGKILL)
+                kill_process_tree(proc, force=True)
 
         threading.Thread(target=_escalate, daemon=True).start()
         return job
@@ -285,4 +291,4 @@ class JobManager:
             time.sleep(0.1)
         for job in running:
             if not job.done:
-                self._kill_group(job._proc.pid, signal.SIGKILL)
+                kill_process_tree(job._proc, force=True)

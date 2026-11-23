@@ -8,6 +8,8 @@ import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from app.core.platform import bash_path
+
 
 @dataclass
 class Command:
@@ -25,17 +27,21 @@ def repo_dir(s: dict) -> Path:
     return Path(_expand(s["repo_dir"]))
 
 
+def _path_like(value: str) -> bool:
+    return "/" in value or "\\" in value or value.startswith("~")
+
+
 def python_arg(s: dict) -> str:
-    """A bare name stays a name (looked up on PATH); anything path-like is expanded."""
+    """A bare name stays a name (looked up on PATH); anything path-like is expanded (C:/… on Windows)."""
     value = str(s["python"]).strip()
-    return _expand(value) if ("/" in value or value.startswith("~")) else value
+    return bash_path(_expand(value)) if _path_like(value) else value
 
 
 def python_info(s: dict) -> dict:
     value = python_arg(s)
     if not value:
         return {"value": value, "found": False, "path": None}
-    if "/" in value:
+    if _path_like(value):
         ok = Path(value).is_file() and os.access(value, os.X_OK)
         return {"value": value, "found": ok, "path": value if ok else None}
     path = shutil.which(value)
@@ -43,7 +49,7 @@ def python_info(s: dict) -> dict:
 
 
 def _render(s: dict, args: list[str]) -> str:
-    return (f"cd {shlex.quote(str(repo_dir(s)))} && exec {shlex.quote(python_arg(s))} "
+    return (f"cd {shlex.quote(bash_path(repo_dir(s)))} && exec {shlex.quote(python_arg(s))} "
             + " ".join(shlex.quote(str(a)) for a in args))
 
 
@@ -60,7 +66,7 @@ def lookup(s: dict, json_ids: list[str], output: Path) -> Command:
     if not json_ids:
         raise ValueError("no json ids")
     timeout = max(1, min(int(s.get("lookup_timeout") or 10), 600))
-    args = [s["lookup_script"], "--ids", *json_ids, "--timeout", str(timeout), "--output", str(output)]
+    args = [s["lookup_script"], "--ids", *json_ids, "--timeout", str(timeout), "--output", bash_path(output)]
     line = _render(s, args)
     n = len(json_ids)
     return Command(f"Staging lookup ({n} id{'s' if n != 1 else ''})", line, line)

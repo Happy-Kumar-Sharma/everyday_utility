@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import shutil
 import tempfile
 import time
@@ -13,6 +12,8 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 import httpx
+
+from app.core.platform import chmod_private
 
 from . import extract, fetcher
 from .htmltree import parse
@@ -180,7 +181,7 @@ def clip(url: str, clips_dir: Path, *, mode: str = "auto", content: str = "main"
         clipped = datetime.now(timezone.utc).astimezone()
         make_dir(clips_dir)
         tmp_dir = Path(tempfile.mkdtemp(prefix=".tmp-clip-", dir=str(clips_dir)))
-        os.chmod(tmp_dir, 0o700)
+        chmod_private(tmp_dir, 0o700)
         try:
             refs = collect_images(sel, meta["base"])
             items = [Item(i + 1, key, payload) for i, (key, payload) in enumerate(refs)]

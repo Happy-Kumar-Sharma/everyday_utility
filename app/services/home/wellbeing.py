@@ -5,7 +5,8 @@ Storage (all under config.DATA_DIR/home, read at call time so tests can redirect
     water.json                {"YYYY-MM-DD": [epoch of each glass]}
     standup.json              {"YYYY-MM-DD": {"status": "done"|"skipped", "at": epoch}, "snooze_until": epoch|null}
 
-Screen time comes from GNOME's idle monitor (sampled by a background thread every 30 s) when that works, otherwise
+Screen time comes from the desktop's idle time (sampled by a background thread every 30 s): GNOME's idle monitor on
+Linux, GetLastInputInfo on Windows. When that doesn't answer (other desktops, macOS, a headless box) it comes
 from browser heartbeats sent while a tab of the app is visible and in use. Only one source counts at a time, and the
 minute sets dedupe, so nothing is double-counted.
 
@@ -29,6 +30,7 @@ from datetime import time as dtime
 from pathlib import Path
 
 from app.core import audit, config, context
+from app.core import platform as plat
 from app.core.registry import SettingField
 
 log = logging.getLogger(__name__)
@@ -207,9 +209,14 @@ def mark_active(now: float) -> bool:
 
 
 # ---- screen time: sources -------------------------------------------------------------------------
+def desktop_source() -> str:
+    """Name of this OS's desktop idle source (the "gnome_ok_at" state below is shared by both)."""
+    return "windows" if plat.IS_WINDOWS else "gnome"
+
+
 def current_source(now: float | None = None) -> str:
     now = time.time() if now is None else now
-    return "gnome" if now - _state["gnome_ok_at"] < GNOME_FRESH_SECONDS else "browser"
+    return desktop_source() if now - _state["gnome_ok_at"] < GNOME_FRESH_SECONDS else "browser"
 
 
 def _dbus_env() -> dict:
@@ -249,6 +256,48 @@ def gnome_idle() -> tuple[int | None, bool | None]:
     return int(m.group(1)), locked
 
 
+def _win32():
+    """(user32, kernel32) with the prototypes used below; raises on non-Windows (no ctypes.WinDLL)."""
+    import ctypes
+    from ctypes import wintypes
+
+    user32, kernel32 = ctypes.WinDLL("user32"), ctypes.WinDLL("kernel32")
+    kernel32.GetTickCount64.restype = ctypes.c_uint64
+    user32.GetLastInputInfo.restype = wintypes.BOOL
+    user32.OpenInputDesktop.restype = wintypes.HANDLE
+    user32.OpenInputDesktop.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    user32.SwitchDesktop.argtypes = user32.CloseDesktop.argtypes = (wintypes.HANDLE,)
+    return user32, kernel32
+
+
+def windows_idle() -> tuple[int | None, bool | None]:
+    """(idle milliseconds, screen locked) from GetLastInputInfo; (None, None) when it can't be read.
+    Locked: the input desktop can't be switched to while the lock screen is up (None = unknown, idle time decides)."""
+    import ctypes
+    from ctypes import wintypes
+
+    class LASTINPUTINFO(ctypes.Structure):
+        _fields_ = (("cbSize", wintypes.UINT), ("dwTime", wintypes.DWORD))
+
+    try:
+        user32, kernel32 = _win32()
+        info = LASTINPUTINFO(ctypes.sizeof(LASTINPUTINFO), 0)
+        if not user32.GetLastInputInfo(ctypes.byref(info)):
+            return None, None
+        idle = (kernel32.GetTickCount64() - info.dwTime) & 0xFFFFFFFF  # dwTime is the 32-bit tick count
+    except (AttributeError, OSError):
+        return None, None
+    locked = None
+    try:
+        desk = user32.OpenInputDesktop(0, False, 0x0100)  # DESKTOP_SWITCHDESKTOP
+        if desk:
+            locked = not user32.SwitchDesktop(desk)
+            user32.CloseDesktop(desk)
+    except (AttributeError, OSError):
+        pass
+    return int(idle), locked
+
+
 IdleSource = Callable[[], "tuple[int | None, bool | None]"]
 
 
@@ -257,21 +306,21 @@ def sample(read_idle: IdleSource | None = None, now: float | None = None, values
     screen isn't locked. Returns {"source", "active"} (active is None when the idle source didn't answer)."""
     now = time.time() if now is None else now
     values = values or settings()[0]
-    idle_ms, locked = (read_idle or gnome_idle)()
+    idle_ms, locked = (read_idle or (windows_idle if plat.IS_WINDOWS else gnome_idle))()
     if idle_ms is None:
         return {"source": current_source(now), "active": None}
     _state["gnome_ok_at"] = now
     active = idle_ms < values["screen_idle_seconds"] * 1000 and locked is not True
     if active:
         mark_active(now)
-    return {"source": "gnome", "active": active}
+    return {"source": desktop_source(), "active": active}
 
 
 def heartbeat(now: float | None = None) -> dict:
-    """Browser fallback: the frontend reports recent input in a visible tab. Ignored while GNOME is the source."""
+    """Browser fallback: the frontend reports recent input in a visible tab. Ignored while a desktop source counts."""
     now = time.time() if now is None else now
     source = current_source(now)
-    if source == "gnome":
+    if source != "browser":
         return {"accepted": False, "source": source}
     mark_active(now)
     return {"accepted": True, "source": source}

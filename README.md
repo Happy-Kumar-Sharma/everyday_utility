@@ -2,6 +2,9 @@
 
 A local web app for the things I keep re-searching: one tab per utility, each runnable with a click.
 
+**Install as a desktop app** (icon in the Ubuntu app grid / Windows Start menu, own window, no terminal):
+see [install.md](install.md) — `bash scripts/install_linux.sh` or double-click `scripts\install_windows.bat`.
+
 ```bash
 ./run.sh            # http://127.0.0.1:8765 (Linux / macOS / Git Bash)
 ./run.sh --reload   # auto-reload while developing

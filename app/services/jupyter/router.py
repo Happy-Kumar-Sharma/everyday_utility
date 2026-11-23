@@ -13,7 +13,7 @@ import threading
 from fastapi import APIRouter, Body, HTTPException
 from pydantic import BaseModel, Field
 
-from app.core import audit, context
+from app.core import audit, context, platform as plat
 from app.core.jobs import CANCELLED, FAILED, JobConflict
 
 from . import checks, commands, parse, profiles
@@ -252,8 +252,8 @@ def remote_servers(profile_id: str):
     except ProfileError as e:
         raise HTTPException(400, str(e)) from e
     try:
-        r = subprocess.run(argv, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=LIST_TIMEOUT,
-                           start_new_session=True)
+        r = subprocess.run(argv, stdin=subprocess.DEVNULL, capture_output=True, encoding="utf-8", errors="replace",
+                           timeout=LIST_TIMEOUT, **plat.popen_group_kwargs())
     except FileNotFoundError as e:
         raise HTTPException(500, "ssh not found on PATH") from e
     except subprocess.TimeoutExpired as e:

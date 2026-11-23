@@ -1,10 +1,13 @@
+from app.core.platform import IS_WINDOWS
 from app.core.registry import SettingField
 
 SETTINGS = (
     SettingField("repo_dir", "Sync repo folder", "~/workspace/your-sync-repo", "path",
                  "The folder with the two scripts and their .env (the scripts run from here).", "Sync"),
-    SettingField("python", "Python interpreter", "python3", "text",
-                 "The interpreter that has the scripts' packages (a name on PATH or a full path, e.g. a venv's bin/python).",
+    # python3 on a stock Windows is the Microsoft Store stub; python / py is the real launcher there
+    SettingField("python", "Python interpreter", "python" if IS_WINDOWS else "python3", "text",
+                 "The interpreter that has the scripts' packages (a name on PATH or a full path, e.g. a venv's "
+                 "bin/python, or Scripts\\python.exe on Windows).",
                  "Sync"),
     SettingField("sync_script", "Step 1 script (prod → staging)", "utilities-og.py", "text",
                  "Relative to the repo folder; run as: <script> sync_ids --ids … [--reupload]", "Sync"),
